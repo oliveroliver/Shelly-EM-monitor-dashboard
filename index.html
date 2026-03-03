@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Power Monitor — Shelly EM</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+  <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css"> -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -247,8 +247,10 @@
     #chart-container { background: #0d0f14; flex: 1; min-height: 0; }
 
     /* ── uPlot overrides ── */
-    .uplot { background: transparent !important; }
-    .u-cursor-x, .u-cursor-y { border-color: #506480 !important; }
+    /* .uplot { background: transparent !important; } */
+    /* .u-cursor-x, .u-cursor-y { border-color: #506480 !important; } */
+    .attoplot { background: transparent !important; }
+    .ap-cursor-x, .ap-cursor-y { border-color: #506480 !important; }
 
     /* ── Cursor tooltip ── */
     #cursor-tooltip {
@@ -480,7 +482,8 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script> -->
+<script src="attoplot.js"></script>
 <script>
 (function () {
 'use strict';
