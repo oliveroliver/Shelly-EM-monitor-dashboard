@@ -30,9 +30,8 @@ function ts() {
   return new Date().toTimeString().slice(0, 8);
 }
 
-function logActive() {
-  const names = [...active.values()].map(a => a.label).join(', ') || '(none)';
-  console.log(`  Active: ${names}`);
+function activeList() {
+  return [...active.values()].map(a => a.label).join(', ') || '(none)';
 }
 
 function startAppliance(def, nowMs) {
@@ -49,7 +48,7 @@ function startAppliance(def, nowMs) {
     phaseOffset:  Math.random() * Math.PI * 2,
     endTime:      nowMs + dur,
   });
-  console.log(`[${ts()}]  ON  ${def.label} (~${Math.round(baseW)}W)`);
+  console.log(`[${ts()}]  ON  ${def.label} (~${Math.round(baseW)}W)  [${activeList()}]`);
 }
 
 function triggerEvent(nowMs) {
@@ -58,12 +57,10 @@ function triggerEvent(nowMs) {
   if (canStart.length > 0 && (Math.random() < 0.65 || canStop.length === 0)) {
     const def = canStart[Math.floor(Math.random() * canStart.length)];
     startAppliance(def, nowMs);
-    logActive();
   } else if (canStop.length > 0) {
     const def = canStop[Math.floor(Math.random() * canStop.length)];
     active.delete(def.id);
-    console.log(`[${ts()}]  OFF ${def.label}`);
-    logActive();
+    console.log(`[${ts()}]  OFF ${def.label}  [${activeList()}]`);
   }
   nextEventMs = nowMs + rand(simulation.eventMinMs, simulation.eventMaxMs);
 }
@@ -75,8 +72,7 @@ function computeState(nowMs) {
   for (const [id, inst] of active) {
     if (nowMs > inst.endTime) {
       active.delete(id);
-      console.log(`[${ts()}]  OFF ${inst.label}  (timer expired)`);
-      logActive();
+      console.log(`[${ts()}]  OFF ${inst.label}  (timer expired)  [${activeList()}]`);
     }
   }
 
@@ -119,7 +115,7 @@ function computeState(nowMs) {
     .forEach(def => startAppliance(def, now));
   nextEventMs = now + rand(simulation.startEventMinMs, simulation.startEventMaxMs);
   currentState = computeState(now);
-  logActive();
+  console.log(`[${ts()}]  INIT  [${activeList()}]`);
 }
 
 // ── WebSocket client registry ─────────────────────────────────────────────────

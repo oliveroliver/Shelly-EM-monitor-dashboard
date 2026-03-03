@@ -142,7 +142,7 @@
     }
 
     /* Connect/Disconnect button */
-    .conn-btn { padding: 4px 12px; white-space: nowrap; min-width: 88px; }
+    .conn-btn { padding: 4px 12px; white-space: nowrap; width: 110px; }
 
     /* Play/pause button — greyed out when inactive */
     .playpause-btn {
@@ -248,6 +248,7 @@
 
     /* ── uPlot overrides ── */
     .uplot { background: transparent !important; }
+    .u-cursor-x, .u-cursor-y { border-color: #506480 !important; }
 
     /* ── Cursor tooltip ── */
     #cursor-tooltip {
@@ -849,7 +850,10 @@ function buildChart() {
         return [0, displayYMax];
       }},
       v: { range: () => [0, 250] },
-      i: { auto: true },
+      i: { auto: true, range: (_u, _min, dataMax) => {
+        const ceil = Math.max(dataMax * 1.55, 5);
+        return [0, ceil];
+      }},
     },
     hooks: {
       drawClear: [u => {
