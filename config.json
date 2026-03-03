@@ -1,0 +1,157 @@
+{
+  "_comment": "Shelly EM Gen3 emulator configuration. Timing values are in milliseconds unless the field name includes a unit suffix.",
+
+  "server": {
+    "_comment": "port: TCP port for HTTP + WebSocket. host: bind address (0.0.0.0 = all interfaces).",
+    "port": 80,
+    "host": "0.0.0.0"
+  },
+
+  "device": {
+    "_comment": "Cosmetic device metadata returned in RPC responses and shown in the dashboard Info panel.",
+    "id":       "shellyem3-A1B2C3",
+    "model":    "Shelly EM Gen3",
+    "firmware": "1.4.2-g3d6b6e5",
+    "mac":      "E8:DB:84:A1:B2:C3",
+    "channel":  0
+  },
+
+  "grid": {
+    "_comment": "UK mains parameters. nominalVoltage V. voltageSwing/voltageRipple/voltageNoise are amplitudes in V. frequency Hz (cosmetic only).",
+    "nominalVoltage":  230,
+    "voltageSwing":    2.5,
+    "voltageRipple":   0.8,
+    "voltageNoise":    0.6,
+    "frequency":       50
+  },
+
+  "simulation": {
+    "_comment": "tickIntervalMs: server recompute cadence (~30 Hz). eventMin/MaxMs: random appliance event spacing. startEventMin/MaxMs: delay before first event.",
+    "tickIntervalMs":  33,
+    "eventMinMs":   5000,
+    "eventMaxMs":  40000,
+    "startEventMinMs": 5000,
+    "startEventMaxMs": 18000
+  },
+
+  "appliances": [
+    {
+      "_comment": "wRange [W]: [min,max] real power. pf: power factor 0-1. noiseAmp W / noiseFreq Hz: sinusoidal noise. noiseAmp2/noiseFreq2: optional second harmonic. alwaysOn: starts immediately and never stops. minDur/maxDur ms: random ON duration range.",
+      "id":         "fridge",
+      "label":      "Fridge",
+      "wRange":     [70, 90],
+      "pf":         0.82,
+      "noiseAmp":   6,
+      "noiseFreq":  0.05,
+      "alwaysOn":   true
+    },
+    {
+      "id":         "tv",
+      "label":      "TV",
+      "wRange":     [100, 140],
+      "pf":         0.96,
+      "noiseAmp":   3,
+      "noiseFreq":  0.3,
+      "minDur":     20000,
+      "maxDur":     180000
+    },
+    {
+      "id":         "kettle",
+      "label":      "Kettle",
+      "wRange":     [2200, 2800],
+      "pf":         0.99,
+      "noiseAmp":   22,
+      "noiseFreq":  1.5,
+      "noiseAmp2":  55,
+      "noiseFreq2": 11.0,
+      "minDur":     5000,
+      "maxDur":     15000
+    },
+    {
+      "id":         "microwave",
+      "label":      "Microwave",
+      "wRange":     [1000, 1300],
+      "pf":         0.95,
+      "noiseAmp":   14,
+      "noiseFreq":  1.0,
+      "minDur":     8000,
+      "maxDur":     50000
+    },
+    {
+      "id":         "washer",
+      "label":      "Washing Machine",
+      "wRange":     [430, 560],
+      "pf":         0.87,
+      "noiseAmp":   28,
+      "noiseFreq":  0.8,
+      "minDur":     90000,
+      "maxDur":     200000
+    },
+    {
+      "id":         "laptop",
+      "label":      "Laptop",
+      "wRange":     [45, 78],
+      "pf":         0.97,
+      "noiseAmp":   3,
+      "noiseFreq":  0.5,
+      "minDur":     30000,
+      "maxDur":     600000
+    },
+    {
+      "id":         "toaster",
+      "label":      "Toaster",
+      "wRange":     [950, 1100],
+      "pf":         0.99,
+      "noiseAmp":   10,
+      "noiseFreq":  0.5,
+      "minDur":     4000,
+      "maxDur":     14000
+    },
+    {
+      "id":         "lights",
+      "label":      "Lights",
+      "wRange":     [16, 28],
+      "pf":         0.95,
+      "noiseAmp":   0.4,
+      "noiseFreq":  2.0,
+      "minDur":     15000,
+      "maxDur":     300000
+    },
+    {
+      "id":         "dishwasher",
+      "label":      "Dishwasher",
+      "wRange":     [1500, 1900],
+      "pf":         0.88,
+      "noiseAmp":   22,
+      "noiseFreq":  0.6,
+      "minDur":     60000,
+      "maxDur":     180000
+    },
+    {
+      "id":         "phone",
+      "label":      "Phone Charger",
+      "wRange":     [8, 15],
+      "pf":         0.97,
+      "noiseAmp":   0.5,
+      "noiseFreq":  0.3,
+      "minDur":     15000,
+      "maxDur":     120000
+    },
+    {
+      "id":         "router",
+      "label":      "Router",
+      "wRange":     [12, 18],
+      "pf":         0.97,
+      "noiseAmp":   0.6,
+      "noiseFreq":  0.2,
+      "alwaysOn":   true
+    }
+  ],
+
+  "seed": {
+    "_comment": "alwaysOnAtStart: switch on all alwaysOn appliances at boot. gentleAppliances: pool of IDs for light startup load. gentleCount: how many to pick from that pool.",
+    "alwaysOnAtStart":   true,
+    "gentleAppliances":  ["tv", "laptop", "lights", "phone"],
+    "gentleCount":       2
+  }
+}

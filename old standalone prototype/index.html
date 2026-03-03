@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Power Monitor — Shelly EM</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow-y: hidden;
+      background: #0d0f14;
+      color: #e8eaf0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+    }
+
+    /* ── Content ── */
+    .content { padding: 10px; display: flex; flex-direction: column; gap: 10px; height: 100dvh; overflow: hidden; min-width: 330px; }
+
+    /* ── Sidebar ── */
+    .sidebar { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+
+    /* ── KPI cards ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+    .kpi-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.2s;
+    }
+    .kpi-card.series-off { opacity: 0.3; }
+    .kpi-card:hover:not(.series-off) { border-color: #8090a8; }
+    .kpi-card.power-card   { border-left: 3px solid #FFE033; }
+    .kpi-card.voltage-card { border-left: 3px solid #00D4D4; }
+    .kpi-card.current-card { border-left: 3px solid #FF5FFF; }
+    .kpi-label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #555b6a; margin-bottom: 6px;
+    }
+    .kpi-value-row { display: flex; align-items: baseline; gap: 3px; }
+    .kpi-value {
+      font-size: 1.15rem; font-weight: 700;
+      color: #e8eaf0; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em; line-height: 1;
+    }
+    .kpi-unit { font-size: 0.875rem; color: #9499a8; }
+    /* ── Controls card ── */
+    .ctrl-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    /* ── Device bar ── */
+    .device-bar {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      padding: 10px;
+      overflow: hidden;
+    }
+    .device-bar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Info button */
+    .info-btn {
+      display: flex; align-items: center;
+      flex-shrink: 0; padding: 4px 10px;
+      border: 1px solid rgba(56,189,248,0.25);
+      border-radius: 20px;
+      background: rgba(56,189,248,0.09);
+      color: #38bdf8;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .info-btn:hover  { border-color: rgba(56,189,248,0.5);  background: rgba(56,189,248,0.16); }
+    .info-btn.active { border-color: rgba(56,189,248,0.6);  background: rgba(56,189,248,0.22); }
+
+    /* Info panel */
+    .info-panel { max-height: 0; overflow: hidden; transition: max-height 0.28s ease; }
+    .info-panel.open { max-height: 200px; }
+    .info-panel-inner {
+      padding-top: 10px;
+      margin-top: 10px;
+      border-top: 1px solid #2a3040;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .info-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .info-key { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #555b6a; }
+    .info-val { font-size: 11px; color: #9499a8; font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.02em; }
+
+    /* Snap button */
+    .snap-btn {
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; padding: 4px 10px;
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 20px;
+      background: rgba(59,130,246,0.09);
+      color: #60a5fa;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .snap-btn:hover  { border-color: rgba(59,130,246,0.5);  background: rgba(59,130,246,0.18); color: #93c5fd; }
+    .snap-btn:active { border-color: rgba(59,130,246,0.6);  background: rgba(59,130,246,0.28); }
+
+    /* Status pill */
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(34,197,94,0.09);
+      border: 1px solid rgba(34,197,94,0.25);
+      border-radius: 20px;
+      padding: 4px 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .status-label { font-size: 11px; font-weight: 500; color: #22c55e; letter-spacing: 0.03em; }
+    @keyframes pulse {
+      0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(34,197,94,.5); }
+      50%      { opacity:.85; box-shadow:0 0 0 4px rgba(34,197,94,0); }
+    }
+    .status-pill.paused {
+      background: rgba(245,158,11,0.09);
+      border-color: rgba(245,158,11,0.25);
+    }
+    .status-pill.paused .status-dot { background: #f59e0b; animation: none; box-shadow: none; }
+    .status-pill.paused .status-label { color: #f59e0b; }
+
+    /* Sliders section — both side by side */
+    .ctrl-sliders {
+      padding: 10px;
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+    }
+    .ctrl-slider-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 34px;
+      background: #0d0f14;
+      border: 1px solid #4e5870;
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .ctrl-slider-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #9499a8;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ctrl-slider-row input[type=range] {
+      flex: 1;
+      min-width: 0;
+    }
+    .ctrl-slider-val {
+      font-size: 12px;
+      font-weight: 500;
+      color: #e8eaf0;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #ymax-label { color: #9499a8; }
+    .ctrl-check {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; color: #9499a8; cursor: pointer; white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ctrl-check input[type=checkbox] { cursor: pointer; accent-color: #FFE033; width: 13px; height: 13px; }
+
+    /* Range slider track + thumb */
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      height: 3px; background: #2a2f3d; border-radius: 2px; outline: none;
+      cursor: pointer;
+    }
+    input[type=range]:disabled { opacity: 0.3; cursor: default; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 13px; height: 13px;
+      border-radius: 50%; background: #FFE033; cursor: pointer;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 13px; height: 13px;
+      border-radius: 50%; background: #FFE033; cursor: pointer; border: none;
+    }
+
+    /* Larger thumb on touch devices */
+    @media (pointer: coarse) {
+      input[type=range]::-webkit-slider-thumb {
+        width: 22px; height: 22px;
+      }
+      input[type=range]::-moz-range-thumb {
+        width: 22px; height: 22px;
+      }
+    }
+
+    /* ── Chart card ── */
+    .chart-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    #chart-container { background: #0d0f14; flex: 1; min-height: 0; }
+
+    /* ── uPlot overrides ── */
+    .uplot { background: transparent !important; }
+
+    /* ── Cursor tooltip ── */
+    #cursor-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      top: 8px;
+      right: 8px;
+      background: rgba(18, 21, 28, 0.96);
+      border: 1px solid #3a3f4d;
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      z-index: 4;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .tip-row { display: flex; align-items: center; gap: 7px; }
+    .tip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .tip-val { color: #e8eaf0; font-weight: 600; min-width: 52px; }
+    .tip-unit { color: #555b6a; }
+
+    /* ── Pause time overlay ── */
+    #pause-overlay {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      pointer-events: none;
+      display: none;
+      align-items: center;
+      height: 34px;
+      background: rgba(13, 15, 20, 0.82);
+      border: 1px solid #3a3f4d;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: #9499a8;
+      letter-spacing: 0.04em;
+      z-index: 3;
+      white-space: nowrap;
+    }
+
+    /* ── Mobile portrait ── */
+    @media (max-width: 520px) {
+      .kpi-unit { font-size: 0.75rem; }
+      .ctrl-sliders { flex-direction: column; }
+    }
+
+    /* ── Landscape (iPad landscape only — pointer: coarse excludes desktop) ── */
+    @media (orientation: landscape) and (min-width: 768px) and (pointer: coarse) {
+      .content { flex-direction: column; }
+      /* sidebar becomes a 2-col grid:
+         row 1: device-bar spans full width
+         row 2: kpi-row left | ctrl-card right */
+      .sidebar {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: auto;
+        overflow-y: visible;
+      }
+      .sidebar .device-bar { grid-column: 1 / -1; }
+      .sidebar .ctrl-sliders { flex-direction: row; }
+    }
+
+    /* ── Sliders hide first (429 + 56px slider height) ── */
+    @media (max-height: 485px) {
+      .ctrl-card { display: none; }
+      .sidebar .kpi-row { grid-column: 1 / -1; }
+    }
+
+    /* ── Info bar hides next ── */
+    @media (max-height: 429px) {
+      .device-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="content">
+
+  <!-- Chart card -->
+  <div class="chart-card">
+    <div class="chart-wrapper">
+      <div id="cursor-tooltip">
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#FFE033"></span>
+          <span class="tip-val" id="tip-w">--</span>
+          <span class="tip-unit">W</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#00D4D4"></span>
+          <span class="tip-val" id="tip-v">--</span>
+          <span class="tip-unit">V</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#FF5FFF"></span>
+          <span class="tip-val" id="tip-i">--</span>
+          <span class="tip-unit">A</span>
+        </div>
+      </div>
+      <div id="pause-overlay"></div>
+      <div id="chart-container"></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+
+    <!-- Device info bar -->
+    <div class="device-bar">
+      <div class="device-bar-top">
+        <button class="info-btn" id="info-btn" title="Device info">Info</button>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="status-pill">
+            <span class="status-dot"></span>
+            <span class="status-label">Simulating — tap to pause</span>
+          </div>
+          <button class="snap-btn" id="snap-btn" title="Download chart as PNG">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="info-panel" id="info-panel">
+        <div class="info-panel-inner">
+          <div class="info-row"><span class="info-key">Model</span><span class="info-val">Shelly EM</span></div>
+          <div class="info-row"><span class="info-key">ID</span><span class="info-val">shellyem-A1B2C3</span></div>
+          <div class="info-row"><span class="info-key">IP</span><span class="info-val">192.168.1.42</span></div>
+          <div class="info-row"><span class="info-key">Firmware</span><span class="info-val">v1.14.0-g60ca17c</span></div>
+          <div class="info-row"><span class="info-key">MAC</span><span class="info-val">E8:DB:84:A1:B2:C3</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpi-row">
+      <div class="kpi-card power-card" data-s="0">
+        <div class="kpi-label">Power</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-w">---</span>
+          <span class="kpi-unit">W</span>
+        </div>
+      </div>
+      <div class="kpi-card voltage-card" data-s="1">
+        <div class="kpi-label">Voltage</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-v">--.-</span>
+          <span class="kpi-unit">V</span>
+        </div>
+      </div>
+      <div class="kpi-card current-card" data-s="2">
+        <div class="kpi-label">Current</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-i">-.--</span>
+          <span class="kpi-unit">A</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls card -->
+    <div class="ctrl-card">
+      <!-- Sliders -->
+      <div class="ctrl-sliders">
+        <div class="ctrl-slider-row">
+          <span class="ctrl-slider-label">Window</span>
+          <input type="range" id="win-slider" min="5" max="120" value="5" step="5">
+          <span class="ctrl-slider-val" id="win-label">5s</span>
+        </div>
+        <div class="ctrl-slider-row">
+          <span class="ctrl-slider-label">Y max</span>
+          <input type="range" id="ymax-slider" min="50" max="5000" value="3000" step="50" disabled>
+          <span class="ctrl-slider-val" id="ymax-label">--</span>
+          <label class="ctrl-check"><input type="checkbox" id="ymax-auto" checked>Auto</label>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+// ── Ring buffers ──────────────────────────────────────────────────────────────
+const BUF = 3600; // 120s × 30Hz (max window)
+const tsBuf = new Float64Array(BUF);
+const wBuf  = new Float64Array(BUF);
+const vBuf  = new Float64Array(BUF);
+const iBuf  = new Float64Array(BUF);
+const outTs = new Float64Array(BUF);
+const outW  = new Float64Array(BUF);
+const outV  = new Float64Array(BUF);
+const outI  = new Float64Array(BUF);
+let bufHead = 0, bufCount = 0;
+
+function fillSlice(src, dst) {
+  const n = bufCount;
+  if (n < BUF) { dst.set(src.subarray(0, n)); return n; }
+  const tail = BUF - bufHead;
+  dst.set(src.subarray(bufHead), 0);
+  dst.set(src.subarray(0, bufHead), tail);
+  return BUF;
+}
+
+// ── Appliance pool ────────────────────────────────────────────────────────────
+const POOL = [
+  { id:'fridge',     label:'Fridge',          wRange:[70,90],     pf:0.82, noiseAmp:6,    noiseFreq:0.05, alwaysOn:true, minDur:0,       maxDur:0 },
+  { id:'tv',         label:'TV',              wRange:[100,140],   pf:0.96, noiseAmp:3,    noiseFreq:0.3,  minDur:20000,  maxDur:180000 },
+  { id:'kettle',     label:'Kettle',          wRange:[2200,2800], pf:0.99, noiseAmp:22,   noiseFreq:1.5,  noiseAmp2:55, noiseFreq2:11.0, minDur:5000,   maxDur:15000 },
+  { id:'microwave',  label:'Microwave',       wRange:[1000,1300], pf:0.95, noiseAmp:14,   noiseFreq:1.0,  minDur:8000,   maxDur:50000 },
+  { id:'washer',     label:'Washing Machine', wRange:[430,560],   pf:0.87, noiseAmp:28,   noiseFreq:0.8,  minDur:90000,  maxDur:200000 },
+  { id:'laptop',     label:'Laptop',          wRange:[45,78],     pf:0.97, noiseAmp:3,    noiseFreq:0.5,  minDur:30000,  maxDur:600000 },
+  { id:'toaster',    label:'Toaster',         wRange:[950,1100],  pf:0.99, noiseAmp:10,   noiseFreq:0.5,  minDur:4000,   maxDur:14000 },
+  { id:'lights',     label:'Lights',          wRange:[16,28],     pf:0.95, noiseAmp:0.4,  noiseFreq:2.0,  minDur:15000,  maxDur:300000 },
+  { id:'dishwasher', label:'Dishwasher',      wRange:[1500,1900], pf:0.88, noiseAmp:22,   noiseFreq:0.6,  minDur:60000,  maxDur:180000 },
+  { id:'phone',      label:'Phone Charger',   wRange:[8,15],      pf:0.97, noiseAmp:0.5,  noiseFreq:0.3,  minDur:15000,  maxDur:120000 },
+  { id:'router',     label:'Router',          wRange:[12,18],     pf:0.97, noiseAmp:0.6,  noiseFreq:0.2,  alwaysOn:true, minDur:0,       maxDur:0 },
+];
+
+const active = new Map();
+let nextEventMs = 0;
+
+function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
+
+function startAppliance(def, nowMs) {
+  const baseW = rand(def.wRange[0], def.wRange[1]);
+  const dur   = def.alwaysOn ? Infinity : rand(def.minDur, def.maxDur);
+  active.set(def.id, {
+    label:       def.label,
+    baseW,
+    pf:          def.pf,
+    noiseAmp:    def.noiseAmp,
+    noiseFreq:   def.noiseFreq,
+    phaseOffset: Math.random() * Math.PI * 2,
+    endTime:     nowMs + dur,
+  });
+}
+
+function triggerEvent(nowMs) {
+  const canStart = POOL.filter(p => !p.alwaysOn && !active.has(p.id));
+  const canStop  = POOL.filter(p => !p.alwaysOn && active.has(p.id));
+  if (canStart.length > 0 && (Math.random() < 0.65 || canStop.length === 0)) {
+    const def = canStart[Math.floor(Math.random() * canStart.length)];
+    startAppliance(def, nowMs);
+  } else if (canStop.length > 0) {
+    const def = canStop[Math.floor(Math.random() * canStop.length)];
+    active.delete(def.id);
+  }
+  nextEventMs = nowMs + rand(5000, 40000);
+}
+
+function computeState(nowMs) {
+  const t = nowMs / 1000;
+
+  // Expire finished appliances
+  for (const [id, inst] of active) {
+    if (nowMs > inst.endTime) active.delete(id);
+  }
+
+  // Scheduled random events
+  if (nowMs >= nextEventMs) triggerEvent(nowMs);
+
+  let P_total = 0, S_total = 0;
+  for (const [, inst] of active) {
+    const P = Math.max(0,
+      inst.baseW
+      + inst.noiseAmp  * Math.sin(2 * Math.PI * inst.noiseFreq  * t + inst.phaseOffset)
+      + (inst.noiseAmp2 || 0) * Math.sin(2 * Math.PI * (inst.noiseFreq2 || 0) * t + inst.phaseOffset + 2.1)
+      + (Math.random() - 0.5) * inst.baseW * 0.018
+    );
+    P_total += P;
+    S_total += P / inst.pf;
+  }
+
+  const PF = S_total > 0 ? P_total / S_total : 0.99;
+  const V  = 230
+    + 2.5 * Math.sin(2 * Math.PI * 0.02  * t + 0.3)
+    + 0.8 * Math.sin(2 * Math.PI * 0.7   * t + 1.1)
+    + 0.6 * (Math.random() - 0.5) * 2;
+  const I  = S_total > 0 ? S_total / Math.max(V, 1) : 0;
+
+  return { power: P_total, voltage: V, current: I, pf: PF };
+}
+
+// ── Chart state ───────────────────────────────────────────────────────────────
+let chart       = null;
+let windowSec   = 5;
+let isPaused    = false;
+let yMaxAuto    = true;
+let yMaxVal     = 3000;
+let displayYMax = 150; // eased scale ceiling
+
+// ── Pan state (drag while paused) ────────────────────────────────────────────
+let pausedAtSec  = 0;     // nowSec captured at moment of pausing
+let panOffset    = 0;     // seconds behind live; 0 = live edge, negative = past
+let isDragging   = false;
+let dragStartX   = 0;
+let dragStartPan = 0;
+let dragMoved    = false;
+let lastDragX    = 0;
+let lastDragT    = 0;
+let dragVelPx    = 0;     // px/ms at release
+let momentumId   = null;
+
+// ── Peek state (drag while live → spring back) ────────────────────────────────
+let dragAutoPaused = false; // true when drag auto-paused a live chart
+let springBackId   = null;  // rAF for spring-back to live
+
+// ── Overlay positioning ───────────────────────────────────────────────────────
+function positionOverlays() {
+  if (!chart) return;
+  const dpr = devicePixelRatio || 1;
+  const b   = chart.bbox;
+  const pl  = b.left   / dpr;
+  const pt  = b.top    / dpr;
+  const pw  = b.width  / dpr;
+  const ph  = b.height / dpr;
+  const c   = document.getElementById('chart-container');
+  const rightInset = (c.offsetWidth  - pl - pw + 8) + 'px';
+  const tooltip = document.getElementById('cursor-tooltip');
+  tooltip.style.top   = (pt + 8) + 'px';
+  tooltip.style.right = rightInset;
+  const pauseEl = document.getElementById('pause-overlay');
+  pauseEl.style.bottom = (c.offsetHeight - pt - ph + 8) + 'px';
+  pauseEl.style.right  = rightInset;
+}
+
+// ── Build uPlot ───────────────────────────────────────────────────────────────
+function buildChart() {
+  const container = document.getElementById('chart-container');
+  const w = container.offsetWidth || 900;
+  const thinW = 1 / (window.devicePixelRatio || 1);
+
+  const h = container.offsetHeight || 420;
+
+  chart = new uPlot({
+    width:   w,
+    height:  h,
+    padding: [22, 16, 0, 0],
+    cursor: {
+      drag:  { x: false, y: false },
+      sync:  { key: null },
+    },
+    select: { show: false },
+    legend: { show: false },
+    axes: [
+      {
+        // x — seconds labels
+        stroke: '#666e80',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { stroke: '#506480', width: thinW, dash: [4, 4] },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   32,
+        incrs:  [1, 2, 5, 10, 15, 20, 30, 60],
+        space:  44,
+        values: (_u, vals) => vals.map(v => {
+          if (v == null) return '';
+          return ':' + String(new Date(v * 1000).getSeconds()).padStart(2, '0');
+        }),
+      },
+      {
+        // left y — Watts
+        scale:  'w',
+        stroke: '#9499a8',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { stroke: '#506480', width: thinW, dash: [4, 4] },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   58,
+        values: (_u, vals) => vals.map(v => v == null ? '' : Math.round(v) + 'W'),
+      },
+      {
+        // right y — Volts
+        scale:  'v',
+        side:   1,
+        stroke: '#9499a8',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { show: false },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   42,
+        values: (_u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + 'V'),
+      },
+      {
+        // right y — Amps (hidden scale for auto-range)
+        scale: 'i',
+        side:  1,
+        show:  false,
+      },
+    ],
+    series: [
+      {},
+      { label:'Power',   scale:'w', stroke:'#FFE033', width:0.7, points:{show:false}, fill:'rgba(255,224,51,0.05)' },
+      { label:'Voltage', scale:'v', stroke:'#00D4D4', width:0.6, points:{show:false} },
+      { label:'Current', scale:'i', stroke:'#FF5FFF', width:0.6, points:{show:false} },
+    ],
+    scales: {
+      x: { time: true },
+      w: { auto: true, range: (_u, _min, dataMax) => {
+        if (!yMaxAuto) return [0, yMaxVal];
+        const target = Math.max(dataMax * 1.55, 150);
+        if (target >= displayYMax) {
+          displayYMax += (target - displayYMax) * 0.14;  // ease up ~0.5s at 30Hz
+        } else {
+          displayYMax += (target - displayYMax) * 0.05; // ease down ~1.5s at 30Hz
+        }
+        return [0, displayYMax];
+      }},
+      v: { range: () => [0, 250] },
+      i: { auto: true },
+    },
+    hooks: {
+      drawClear: [u => {
+        const { left, top, width, height } = u.bbox;
+        u.ctx.fillStyle = '#0d0f14';
+        u.ctx.fillRect(left, top, width, height);
+      }],
+      draw: [u => {
+        const { left, top, width, height } = u.bbox;
+        u.ctx.save();
+        const l = Math.floor(left)         + 0.5;
+        const t = Math.floor(top)          + 0.5;
+        const r = Math.floor(left + width) + 0.5;
+        const b = Math.floor(top + height) + 0.5;
+        u.ctx.strokeStyle = '#506480';
+        u.ctx.lineWidth = 1;
+        u.ctx.strokeRect(l, t, r - l, b - t);
+        u.ctx.restore();
+      }],
+      setCursor: [u => {
+        const idx = u.cursor.idx;
+        if (idx == null || !u.data[1] || u.data[1][idx] == null) {
+          tipEl.style.display = 'none';
+          return;
+        }
+        tipW.textContent = Math.round(u.data[1][idx]).toLocaleString();
+        tipV.textContent = u.data[2][idx].toFixed(1);
+        tipI.textContent = u.data[3][idx].toFixed(2);
+        tipEl.style.display = 'flex';
+      }],
+    },
+  }, [[], [], [], []], container);
+}
+
+// ── Pause overlay helpers ─────────────────────────────────────────────────────
+const pauseOverlay = document.getElementById('pause-overlay');
+
+function fmtHMS(sec) {
+  const d = new Date(Math.round(sec) * 1000);
+  return d.getHours().toString().padStart(2, '0') + ':' +
+         d.getMinutes().toString().padStart(2, '0') + ':' +
+         d.getSeconds().toString().padStart(2, '0');
+}
+
+function updatePauseOverlay() {
+  if (!isPaused) { pauseOverlay.style.display = 'none'; return; }
+  const maxSec = pausedAtSec + panOffset;
+  const minSec = maxSec - windowSec;
+  pauseOverlay.textContent = fmtHMS(minSec) + '\u2009\u2013\u2009' + fmtHMS(maxSec);
+  pauseOverlay.style.display = 'flex';
+}
+
+// ── Pan helpers ───────────────────────────────────────────────────────────────
+function plotWidthPx() {
+  // canvas width minus left-axis (58) + right-axis (42) + right-padding (10)
+  return Math.max(chart.width - 110, 100);
+}
+function pxToSec(px) { return (px / plotWidthPx()) * windowSec; }
+
+function applyPan() {
+  const maxBack = bufCount > 0 ? (bufCount - 1) / 30 : 0;
+  panOffset = Math.max(-maxBack, Math.min(0, panOffset));
+  const ref = pausedAtSec; // fixed reference: the second we paused
+  chart.setScale('x', { min: ref + panOffset - windowSec, max: ref + panOffset });
+  updatePauseOverlay();
+}
+
+function cancelMomentum() {
+  if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
+}
+
+function startMomentum(initVel) {
+  cancelMomentum();
+  if (Math.abs(initVel) < 0.05) return;
+  let vel = initVel;
+  let last = performance.now();
+  function step(now) {
+    const dt = Math.min(now - last, 50);
+    last = now;
+    panOffset -= pxToSec(vel * dt);
+    const maxBack = bufCount > 0 ? (bufCount - 1) / 30 : 0;
+    const clamped = Math.max(-maxBack, Math.min(0, panOffset));
+    if (clamped !== panOffset) { panOffset = clamped; applyPan(); momentumId = null; return; }
+    vel *= Math.pow(0.92, dt / 16); // decay: ~60% speed loss per second
+    applyPan();
+    momentumId = Math.abs(vel) > 0.005 ? requestAnimationFrame(step) : null;
+  }
+  momentumId = requestAnimationFrame(step);
+}
+
+function cancelSpringBack() {
+  if (springBackId) { cancelAnimationFrame(springBackId); springBackId = null; }
+}
+
+// Animate panOffset → 0 then resume live
+function startSpringBack() {
+  cancelMomentum();
+  cancelSpringBack();
+  function step() {
+    panOffset *= 0.72;  // exponential decay — ~250ms to live
+    if (Math.abs(panOffset) < 0.02) {
+      panOffset = 0; springBackId = null;
+      isPaused = false; pausedAtSec = 0;
+      updatePauseOverlay();
+      return;
+    }
+    const nowSec = Date.now() / 1000;
+    chart.setScale('x', { min: nowSec - windowSec + panOffset, max: nowSec + panOffset });
+    springBackId = requestAnimationFrame(step);
+  }
+  springBackId = requestAnimationFrame(step);
+}
+
+// ── KPI updates (throttled to 0.5s) ──────────────────────────────────────────
+const elV   = document.getElementById('val-v');
+const elI   = document.getElementById('val-i');
+const elW   = document.getElementById('val-w');
+const tipEl = document.getElementById('cursor-tooltip');
+const tipW  = document.getElementById('tip-w');
+const tipV  = document.getElementById('tip-v');
+const tipI  = document.getElementById('tip-i');
+let ymaxLabelEl = null; // assigned in init
+let lastKPIMs = 0;
+
+function updateKPIs(state, nowMs) {
+  if (nowMs - lastKPIMs < 250) return;
+  lastKPIMs = nowMs;
+  elV.textContent = state.voltage.toFixed(1);
+  elI.textContent = state.current.toFixed(2);
+  elW.textContent = Math.round(state.power).toLocaleString();
+  if (ymaxLabelEl && yMaxAuto) ymaxLabelEl.textContent = Math.round(displayYMax) + 'W';
+}
+
+// ── Main tick ─────────────────────────────────────────────────────────────────
+function tick() {
+  const nowMs  = Date.now();
+  const nowSec = nowMs / 1000;
+  const state  = computeState(nowMs);
+
+  // Write into ring buffer
+  tsBuf[bufHead] = nowSec;
+  wBuf[bufHead]  = state.power;
+  vBuf[bufHead]  = state.voltage;
+  iBuf[bufHead]  = state.current;
+  bufHead = (bufHead + 1) % BUF;
+  if (bufCount < BUF) bufCount++;
+
+  const n = fillSlice(tsBuf, outTs);
+  fillSlice(wBuf, outW);
+  fillSlice(vBuf, outV);
+  fillSlice(iBuf, outI);
+
+  if (chart) {
+    chart.setData([
+      outTs.subarray(0, n),
+      outW.subarray(0, n),
+      outV.subarray(0, n),
+      outI.subarray(0, n),
+    ]);
+    if (!isPaused) {
+      chart.setScale('x', { min: nowSec - windowSec, max: nowSec });
+    } else if (springBackId) {
+      // Spring active: lock scale to current panOffset so setData can't auto-fit
+      chart.setScale('x', { min: nowSec - windowSec + panOffset, max: nowSec + panOffset });
+    } else {
+      applyPan();
+    }
+  }
+
+  updateKPIs(state, nowMs);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  requestAnimationFrame(() => {
+
+    // Seed simulation
+    const now = Date.now();
+    POOL.filter(p => p.alwaysOn).forEach(def => startAppliance(def, now));
+    const gentle = ['tv', 'laptop', 'lights', 'phone'];
+    POOL.filter(p => gentle.includes(p.id))
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 2)
+        .forEach(def => startAppliance(def, now));
+    nextEventMs = now + rand(5000, 18000);
+
+    // Build chart; hide Current series by default
+    buildChart();
+    positionOverlays();
+    chart.setSeries(3, { show: false });
+    document.querySelector('.kpi-card[data-s="2"]').classList.add('series-off');
+
+    // KPI card toggles
+    document.querySelectorAll('.kpi-card[data-s]').forEach(card => {
+      card.addEventListener('click', () => {
+        const isOff = card.classList.toggle('series-off');
+        chart.setSeries(parseInt(card.dataset.s) + 1, { show: !isOff });
+      });
+    });
+
+    // Window slider
+    const winSlider = document.getElementById('win-slider');
+    const winLabel  = document.getElementById('win-label');
+    winSlider.addEventListener('input', () => {
+      windowSec = parseInt(winSlider.value);
+      winLabel.textContent = windowSec + 's';
+    });
+
+    // Y-max controls
+    const ymaxSlider = document.getElementById('ymax-slider');
+    const ymaxLabel  = document.getElementById('ymax-label');
+    const ymaxAuto   = document.getElementById('ymax-auto');
+    ymaxLabelEl = ymaxLabel;
+    ymaxSlider.addEventListener('input', () => {
+      yMaxVal = parseInt(ymaxSlider.value);
+      ymaxLabel.textContent = yMaxVal.toLocaleString() + 'W';
+    });
+    ymaxAuto.addEventListener('change', () => {
+      yMaxAuto = ymaxAuto.checked;
+      ymaxSlider.disabled = yMaxAuto;
+      if (!yMaxAuto) ymaxLabel.textContent = yMaxVal.toLocaleString() + 'W';
+    });
+
+    // Pause toggle + drag-to-pan while paused
+    const statusPill  = document.querySelector('.status-pill');
+    const statusLabel = document.querySelector('.status-label');
+    const chartEl     = document.getElementById('chart-container');
+
+    function setPaused(paused) {
+      isPaused = paused;
+      if (paused) pausedAtSec = Date.now() / 1000;
+      statusPill.classList.toggle('paused', isPaused);
+      statusLabel.textContent = isPaused ? 'Paused — tap to resume' : 'Simulating — tap to pause';
+      if (!isPaused) { pausedAtSec = 0; panOffset = 0; cancelMomentum(); cancelSpringBack(); dragAutoPaused = false; }
+      updatePauseOverlay();
+    }
+
+    statusPill.addEventListener('click', () => setPaused(!isPaused));
+
+    // Scroll wheel changes window size
+    chartEl.addEventListener('wheel', e => {
+      e.preventDefault();
+      const step = e.deltaY > 0 ? 5 : -5;
+      windowSec = Math.min(120, Math.max(5, windowSec + step));
+      winSlider.value = windowSec;
+      winLabel.textContent = windowSec + 's';
+    }, { passive: false });
+
+    chartEl.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      isDragging = true; dragMoved = false;
+      dragStartX = e.clientX; dragStartPan = panOffset;
+      lastDragX = e.clientX; lastDragT = performance.now();
+      dragVelPx = 0; cancelMomentum(); cancelSpringBack();
+      if (isPaused) e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      if (Math.abs(e.clientX - dragStartX) > 4) dragMoved = true;
+      const dt = performance.now() - lastDragT;
+      if (dt > 0) dragVelPx = (e.clientX - lastDragX) / dt;
+      lastDragX = e.clientX; lastDragT = performance.now();
+      // Auto-pause on first live drag movement
+      if (!isPaused && dragMoved && !dragAutoPaused) {
+        dragAutoPaused = true;
+        isPaused = true; pausedAtSec = Date.now() / 1000;
+        dragStartPan = 0; panOffset = 0;
+      }
+      if (isPaused) {
+        panOffset = dragStartPan - pxToSec(e.clientX - dragStartX);
+        applyPan();
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (dragAutoPaused) {
+        dragAutoPaused = false;
+        startSpringBack();
+      } else if (isPaused && dragMoved) {
+        startMomentum(dragVelPx);
+      }
+    });
+
+    // Touch support
+    chartEl.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      isDragging = true; dragMoved = false;
+      dragStartX = t.clientX; dragStartPan = panOffset;
+      lastDragX = t.clientX; lastDragT = performance.now();
+      dragVelPx = 0; cancelMomentum(); cancelSpringBack();
+    }, { passive: true });
+
+    chartEl.addEventListener('touchmove', e => {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dt = performance.now() - lastDragT;
+      if (dt > 0) dragVelPx = (t.clientX - lastDragX) / dt;
+      lastDragX = t.clientX; lastDragT = performance.now();
+      if (Math.abs(t.clientX - dragStartX) > 10) dragMoved = true;
+      // Auto-pause on first live drag movement
+      if (!isPaused && dragMoved && !dragAutoPaused) {
+        dragAutoPaused = true;
+        isPaused = true; pausedAtSec = Date.now() / 1000;
+        dragStartPan = 0; panOffset = 0;
+      }
+      if (isPaused) {
+        panOffset = dragStartPan - pxToSec(t.clientX - dragStartX);
+        applyPan();
+      }
+    }, { passive: true });
+
+    chartEl.addEventListener('touchend', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (dragAutoPaused) {
+        dragAutoPaused = false;
+        startSpringBack();
+      } else if (isPaused && dragMoved) {
+        startMomentum(dragVelPx);
+      }
+    });
+
+    // Info panel toggle
+    document.getElementById('info-btn').addEventListener('click', () => {
+      const isOpen = document.getElementById('info-panel').classList.toggle('open');
+      document.getElementById('info-btn').classList.toggle('active', isOpen);
+    });
+
+    // Snap to PNG
+    document.getElementById('snap-btn').addEventListener('click', () => {
+      const canvas = document.querySelector('#chart-container canvas');
+      if (!canvas) return;
+      const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = 'power-monitor-' + ts + '.png';
+      a.click();
+    });
+
+    // Resize handler
+    function resizeChart() {
+      const container = document.getElementById('chart-container');
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      if (chart && w > 0 && h > 0) {
+        chart.setSize({ width: w, height: h });
+        positionOverlays();
+      }
+    }
+    window.addEventListener('resize', resizeChart);
+    window.addEventListener('orientationchange', () => setTimeout(resizeChart, 200));
+    new ResizeObserver(resizeChart).observe(document.getElementById('chart-container'));
+
+    // Start loop
+    tick();
+    setInterval(tick, 33);
+  });
+});
+
+}());
+</script>
+</body>
+</html>

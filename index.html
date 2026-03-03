@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Power Monitor — Shelly EM</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow-y: hidden;
+      background: #0d0f14;
+      color: #e8eaf0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+    }
+
+    /* ── Content ── */
+    .content { padding: 10px; display: flex; flex-direction: column; gap: 10px; height: 100dvh; overflow: hidden; min-width: 350px; }
+
+    /* ── Sidebar ── */
+    .sidebar { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
+
+    /* ── KPI cards ── */
+    .kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+    .kpi-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      padding: 10px;
+      cursor: pointer;
+      user-select: none;
+      transition: opacity 0.2s, border-color 0.15s;
+    }
+    .kpi-card.series-off { opacity: 0.3; }
+    .kpi-card:hover:not(.series-off) { border-color: #8090a8; }
+    .kpi-card.power-card   { border-left: 3px solid #FFE033; }
+    .kpi-card.voltage-card { border-left: 3px solid #00D4D4; }
+    .kpi-card.current-card { border-left: 3px solid #FF5FFF; }
+    .kpi-label {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #555b6a; margin-bottom: 6px;
+    }
+    .kpi-value-row { display: flex; align-items: baseline; gap: 3px; }
+    .kpi-value {
+      font-size: 1.15rem; font-weight: 700;
+      color: #e8eaf0; font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em; line-height: 1;
+    }
+    .kpi-unit { font-size: 0.875rem; color: #9499a8; }
+    /* ── Controls card ── */
+    .ctrl-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    /* ── Device bar ── */
+    .device-bar {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      padding: 10px;
+      overflow: hidden;
+    }
+    .device-bar-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Shared button base */
+    .btn {
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; padding: 4px 10px;
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 20px;
+      background: rgba(59,130,246,0.09);
+      color: #60a5fa;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+      cursor: pointer;
+      user-select: none; outline: none;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .btn:hover  { border-color: rgba(59,130,246,0.5);  background: rgba(59,130,246,0.18); color: #93c5fd; }
+    .btn:active, .btn.active { border-color: rgba(59,130,246,0.6);  background: rgba(59,130,246,0.28); }
+
+    /* Settings button */
+    .settings-btn { gap: 4px; }
+    /* Settings panel */
+    .settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.28s ease; }
+    .settings-panel.open { max-height: 500px; }
+    .settings-panel-inner {
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #2a3040;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .settings-row, .info-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+      min-height: 21px;
+    }
+    .settings-key { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #555b6a; }
+    .settings-unit { font-size: 10px; color: #555b6a; font-family: 'SF Mono', 'Fira Code', monospace; margin-left: auto; }
+    .settings-input {
+      width: 120px; padding: 3px 6px;
+      background: #0d0f14; border: 1px solid #4e5870; border-radius: 4px;
+      color: #e8eaf0; font-size: 11px; line-height: 1;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      text-align: right; outline: none;
+      -moz-appearance: textfield;
+    }
+    .settings-input::-webkit-outer-spin-button,
+    .settings-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .settings-input:focus { border-color: #38bdf8; }
+    .settings-input.warn { color: #f59e0b; }
+
+    /* Info rows (inside settings panel) */
+    .info-key { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #555b6a; }
+    .info-val { font-size: 11px; color: #9499a8; font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.02em; }
+
+
+    /* Device bar connected glow */
+    .device-bar.is-connected {
+      animation: glow-green 3s ease-in-out infinite;
+    }
+    @keyframes glow-green {
+      0%,100% { box-shadow: 0 0 4px 1px rgba(34,197,94,0.35); border-color: rgba(34,197,94,0.5); }
+      50%     { box-shadow: 0 0 6px 1px rgba(34,197,94,0.42); border-color: rgba(34,197,94,0.65); }
+    }
+
+    /* Connection controls wrapper — no border, just spacing */
+    .conn-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Connect/Disconnect button */
+    .conn-btn { padding: 4px 12px; white-space: nowrap; min-width: 88px; }
+
+    /* Play/pause button — greyed out when inactive */
+    .playpause-btn {
+      padding: 4px 8px;
+      cursor: default;
+      transition: border-color 0.15s, background 0.15s, color 0.15s, opacity 0.15s;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .playpause-btn.is-active { opacity: 1; cursor: pointer; pointer-events: auto; }
+
+    /* Play/pause icon toggling */
+    .pp-icon { display: none; }
+    .pp-icon-pause { display: block; }
+    .playpause-btn.is-paused .pp-icon-pause { display: none; }
+    .playpause-btn.is-paused .pp-icon-play  { display: block; transform: translateX(1px); }
+
+    /* Sliders section — both side by side */
+    .ctrl-sliders {
+      padding: 10px;
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+    }
+    .ctrl-slider-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 34px;
+      background: #0d0f14;
+      border: 1px solid #4e5870;
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }
+    .ctrl-slider-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #9499a8;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ctrl-slider-row input[type=range] {
+      flex: 1;
+      min-width: 0;
+    }
+    .ctrl-slider-val {
+      font-size: 12px;
+      font-weight: 500;
+      color: #e8eaf0;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #ymax-label { color: #9499a8; }
+    .ctrl-check {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; color: #9499a8; cursor: pointer; white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ctrl-check input[type=checkbox] { cursor: pointer; accent-color: #FFE033; width: 13px; height: 13px; }
+
+    /* Range slider track + thumb */
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      height: 3px; background: #2a2f3d; border-radius: 2px; outline: none;
+      cursor: pointer;
+    }
+    input[type=range]:disabled { opacity: 0.3; cursor: default; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 13px; height: 13px;
+      border-radius: 50%; background: #FFE033; cursor: pointer;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 13px; height: 13px;
+      border-radius: 50%; background: #FFE033; cursor: pointer; border: none;
+    }
+
+    /* Larger thumb on touch devices */
+    @media (pointer: coarse) {
+      input[type=range]::-webkit-slider-thumb {
+        width: 22px; height: 22px;
+      }
+      input[type=range]::-moz-range-thumb {
+        width: 22px; height: 22px;
+      }
+    }
+
+    /* ── Chart card ── */
+    .chart-card {
+      background: #161920;
+      border: 1px solid #5c6880;
+      border-radius: 10px;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    #chart-container { background: #0d0f14; flex: 1; min-height: 0; }
+
+    /* ── uPlot overrides ── */
+    .uplot { background: transparent !important; }
+
+    /* ── Cursor tooltip ── */
+    #cursor-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      top: 8px;
+      right: 8px;
+      background: rgba(18, 21, 28, 0.96);
+      border: 1px solid #3a3f4d;
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      z-index: 4;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .tip-row { display: flex; align-items: center; gap: 7px; }
+    .tip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .tip-val { color: #e8eaf0; font-weight: 600; min-width: 52px; }
+    .tip-unit { color: #555b6a; }
+
+    /* ── Pause time overlay ── */
+    #pause-overlay {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      pointer-events: none;
+      display: none;
+      align-items: center;
+      height: 34px;
+      background: rgba(13, 15, 20, 0.82);
+      border: 1px solid #3a3f4d;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      color: #9499a8;
+      letter-spacing: 0.04em;
+      z-index: 3;
+      white-space: nowrap;
+    }
+
+    /* ── Mobile portrait ── */
+    @media (max-width: 520px) {
+      .kpi-unit { font-size: 0.75rem; }
+      .ctrl-sliders { flex-direction: column; }
+    }
+
+    /* ── Landscape (iPad landscape only — pointer: coarse excludes desktop) ── */
+    @media (orientation: landscape) and (min-width: 768px) and (pointer: coarse) {
+      .content { flex-direction: column; }
+      /* sidebar becomes a 2-col grid:
+         row 1: device-bar spans full width
+         row 2: kpi-row left | ctrl-card right */
+      .sidebar {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: auto;
+        overflow-y: visible;
+      }
+      .sidebar .device-bar { grid-column: 1 / -1; }
+      .sidebar .ctrl-sliders { flex-direction: row; }
+    }
+
+    /* ── Sliders hide first (429 + 56px slider height) ── */
+    @media (max-height: 485px) {
+      .ctrl-card { display: none; }
+      .sidebar .kpi-row { grid-column: 1 / -1; }
+    }
+
+    /* ── Info bar hides next ── */
+    @media (max-height: 429px) {
+      .device-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="content">
+
+  <!-- Chart card -->
+  <div class="chart-card">
+    <div class="chart-wrapper">
+      <div id="cursor-tooltip">
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#FFE033"></span>
+          <span class="tip-val" id="tip-w">--</span>
+          <span class="tip-unit">W</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#00D4D4"></span>
+          <span class="tip-val" id="tip-v">--</span>
+          <span class="tip-unit">V</span>
+        </div>
+        <div class="tip-row">
+          <span class="tip-dot" style="background:#FF5FFF"></span>
+          <span class="tip-val" id="tip-i">--</span>
+          <span class="tip-unit">A</span>
+        </div>
+      </div>
+      <div id="pause-overlay"></div>
+      <div id="chart-container"></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+
+    <!-- Device info bar -->
+    <div class="device-bar">
+      <div class="settings-panel" id="settings-panel">
+        <div class="settings-panel-inner">
+          <div class="info-row"><span class="info-key">Samples</span><span class="info-val" id="info-samples">0</span></div>
+          <div class="info-row"><span class="info-key">Duration</span><span class="info-val" id="info-duration">0s</span></div>
+          <div style="border-top:1px solid #2a3040; margin-top:5px; margin-bottom:5px;"></div>
+          <div class="settings-row">
+            <span class="settings-key">Host</span>
+            <input class="settings-input" type="text" id="cfg-host" value="localhost" placeholder="IP or hostname">
+          </div>
+          <div class="settings-row">
+            <span class="settings-key">Port</span>
+            <input class="settings-input" type="text" inputmode="numeric" id="cfg-port" value="80" placeholder="80">
+          </div>
+          <div class="settings-row">
+            <span class="settings-key">Poll rate</span>
+            <span class="settings-unit">samples/s</span>
+            <input class="settings-input" type="text" inputmode="numeric" id="cfg-rate" value="2" placeholder="2">
+          </div>
+          <div class="settings-row">
+            <span class="settings-key">Draw rate</span>
+            <span class="settings-unit">fps</span>
+            <input class="settings-input" type="text" inputmode="numeric" id="cfg-drawrate" value="30" placeholder="30">
+          </div>
+          <div class="settings-row">
+            <span class="settings-key">Max log</span>
+            <span class="settings-unit">min</span>
+            <input class="settings-input" type="text" inputmode="numeric" id="cfg-maxlog" value="10" placeholder="10">
+          </div>
+          <div id="warn-row" style="display:none">
+            <div style="border-top:1px solid #2a3040; margin-top:5px; margin-bottom:10px;"></div>
+            <div style="text-align:center">
+              <span class="settings-key" style="color:#f59e0b;white-space:normal;line-height:1.4">Poll rates &gt;5 may cause issues with Shelly EM. Other high values may impact browser performance or stability.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="device-bar-top">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="btn settings-btn" id="settings-btn" title="Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+          <button class="btn" id="csv-btn" title="Download CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button class="btn" id="snap-btn" title="Download chart as PNG">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        </div>
+        <div class="conn-controls" id="conn-controls">
+          <button class="btn playpause-btn" id="playpause-btn" title="Play / Pause" aria-label="Pause">
+            <svg class="pp-icon pp-icon-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16" rx="1"/>
+              <rect x="14" y="4" width="4" height="16" rx="1"/>
+            </svg>
+            <svg class="pp-icon pp-icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21"/>
+            </svg>
+          </button>
+          <button class="btn conn-btn" id="conn-btn">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpi-row">
+      <div class="kpi-card power-card" data-s="0">
+        <div class="kpi-label">Power</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-w">---</span>
+          <span class="kpi-unit">W</span>
+        </div>
+      </div>
+      <div class="kpi-card voltage-card" data-s="1">
+        <div class="kpi-label">Voltage</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-v">--.-</span>
+          <span class="kpi-unit">V</span>
+        </div>
+      </div>
+      <div class="kpi-card current-card" data-s="2">
+        <div class="kpi-label">Current</div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="val-i">-.--</span>
+          <span class="kpi-unit">A</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls card -->
+    <div class="ctrl-card">
+      <!-- Sliders -->
+      <div class="ctrl-sliders">
+        <div class="ctrl-slider-row">
+          <span class="ctrl-slider-label">Window</span>
+          <input type="range" id="win-slider" min="5" max="120" value="5" step="5">
+          <span class="ctrl-slider-val" id="win-label">5s</span>
+        </div>
+        <div class="ctrl-slider-row">
+          <span class="ctrl-slider-label">Y max</span>
+          <input type="range" id="ymax-slider" min="50" max="5000" value="3000" step="50" disabled>
+          <span class="ctrl-slider-val" id="ymax-label">--</span>
+          <label class="ctrl-check"><input type="checkbox" id="ymax-auto" checked>Auto</label>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+// ── Data store ────────────────────────────────────────────────────────────────
+// Each entry: { ts: Date, tsSec: number, voltage, current, act_power, aprt_power, pf, freq }
+let dataPoints = [];
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'shelly-em-dashboard-config';
+const serverIp = window.location.hostname || 'localhost';
+const serverPort = parseInt(window.location.port) || 80;
+const defaultConfig = { host: serverIp, port: serverPort, rate: 2, drawRate: 30, maxLog: 10 };
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return Object.assign({}, defaultConfig, JSON.parse(raw));
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function saveConfig(cfg) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch (e) { /* ignore */ }
+}
+
+function getConfig() {
+  const host = document.getElementById('cfg-host').value.trim() || serverIp;
+  const port = Math.max(1, parseInt(document.getElementById('cfg-port').value) || 80);
+  const rate = Math.max(1, Math.min(60, parseInt(document.getElementById('cfg-rate').value) || 2));
+  const drawRate = Math.max(1, Math.min(60, parseInt(document.getElementById('cfg-drawrate').value) || 30));
+  const maxLog = Math.max(1, parseInt(document.getElementById('cfg-maxlog').value) || 10);
+  return { host, port, rate, drawRate, maxLog };
+}
+
+function applyConfig(cfg) {
+  document.getElementById('cfg-host').value = cfg.host;
+  document.getElementById('cfg-port').value = cfg.port;
+  document.getElementById('cfg-rate').value = cfg.rate;
+  document.getElementById('cfg-drawrate').value = cfg.drawRate || 30;
+  document.getElementById('cfg-maxlog').value = cfg.maxLog;
+}
+
+// ── WebSocket connection ──────────────────────────────────────────────────────
+let ws = null;
+let rpcId = 0;
+let pollTimeout = null;
+let reconnectTimeout = null;
+let reconnectDelay = 2000;
+let intentionalClose = false;
+let isPaused = false;
+
+// Connection states: 'disconnected', 'connecting', 'connected', 'paused'
+let connState = 'disconnected';
+
+function setConnState(state, extra) {
+  connState = state;
+  const deviceBar    = document.querySelector('.device-bar');
+  const connBtn      = document.getElementById('conn-btn');
+  const playpauseBtn = document.getElementById('playpause-btn');
+
+  const isLive = (state === 'connected' || state === 'paused');
+  deviceBar.classList.toggle('is-connected', isLive);
+  playpauseBtn.classList.toggle('is-active', isLive);
+
+  switch (state) {
+    case 'disconnected':
+      connBtn.textContent = 'Connect';
+      playpauseBtn.classList.remove('is-paused');
+      break;
+    case 'connecting':
+      connBtn.textContent = extra || 'Connecting\u2026';
+      playpauseBtn.classList.remove('is-paused');
+      break;
+    case 'connected':
+      connBtn.textContent = 'Disconnect';
+      playpauseBtn.classList.remove('is-paused');
+      playpauseBtn.setAttribute('aria-label', 'Pause');
+      break;
+    case 'paused':
+      connBtn.textContent = 'Disconnect';
+      playpauseBtn.classList.add('is-paused');
+      playpauseBtn.setAttribute('aria-label', 'Resume');
+      break;
+  }
+}
+
+function wsConnect() {
+  const cfg = getConfig();
+  saveConfig(cfg);
+  intentionalClose = false;
+  reconnectDelay = 2000;
+
+  if (ws) { intentionalClose = true; ws.close(); ws = null; }
+  clearTimeout(pollTimeout);
+  clearTimeout(reconnectTimeout);
+
+  const url = 'ws://' + cfg.host + ':' + cfg.port + '/rpc';
+  setConnState('connecting');
+
+  ws = new WebSocket(url);
+
+  ws.onopen = function () {
+    setConnState('connected');
+    reconnectDelay = 2000;
+    // If there's existing data, spring from the old frozen view to live
+    if (dataPoints.length > 0) {
+      const oldEdge = dataPoints[dataPoints.length - 1].tsSec;
+      const nowEdge = Date.now() / 1000 - 1 / getConfig().rate;
+      const gap = oldEdge - nowEdge;
+      if (Math.abs(gap) > 0.02) {
+        panOffset = gap;
+        startSpringBack();
+      }
+    }
+    startRenderLoop();
+    sendPoll();
+  };
+
+  ws.onmessage = function (evt) {
+    try {
+      const msg = JSON.parse(evt.data);
+      if (msg.error) {
+        console.error('RPC error:', msg.error);
+      } else if (msg.result) {
+        handleResult(msg.result);
+      }
+    } catch (e) {
+      console.error('Failed to parse WS message:', e);
+    }
+    // Schedule next poll after configured interval
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      const cfg = getConfig();
+      const interval = Math.round(1000 / cfg.rate);
+      pollTimeout = setTimeout(sendPoll, interval);
+    }
+  };
+
+  ws.onclose = function () {
+    ws = null;
+    clearTimeout(pollTimeout);
+    stopRenderLoop();
+    if (!intentionalClose) {
+      scheduleReconnect();
+    } else {
+      setConnState('disconnected');
+    }
+  };
+
+  ws.onerror = function () {
+    // onclose will fire after this
+  };
+}
+
+function sendPoll() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  rpcId++;
+  ws.send(JSON.stringify({
+    id: rpcId,
+    src: 'dashboard',
+    method: 'EM1.GetStatus',
+    params: { id: 0 }
+  }));
+}
+
+function wsDisconnect() {
+  intentionalClose = true;
+  clearTimeout(pollTimeout);
+  clearTimeout(reconnectTimeout);
+  stopRenderLoop();
+  if (ws) { ws.close(); ws = null; }
+  setConnState('disconnected');
+  if (isPaused) {
+    setPausedState(false, true);
+  }
+}
+
+function scheduleReconnect() {
+  setConnState('connecting');
+
+  reconnectTimeout = setTimeout(function () {
+    wsConnect();
+  }, reconnectDelay);
+
+  // Backoff: 2s, 4s, 8s, 16s, 30s max
+  reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+}
+
+let lastPoint = null;
+let renderInterval = null;
+
+function startRenderLoop() {
+  stopRenderLoop();
+  const cfg = getConfig();
+  const ms = Math.round(1000 / cfg.drawRate);
+  renderInterval = setInterval(function () {
+    updateChartData();
+    if (lastPoint) {
+      updateKPIs(lastPoint);
+      updateInfo();
+    }
+  }, ms);
+}
+
+function stopRenderLoop() {
+  if (renderInterval) { clearInterval(renderInterval); renderInterval = null; }
+}
+
+function handleResult(result) {
+  const now = new Date();
+  const tsSec = now.getTime() / 1000;
+  const cfg = getConfig();
+
+  const point = {
+    ts: now,
+    tsSec: tsSec,
+    voltage: result.voltage || 0,
+    current: result.current || 0,
+    act_power: result.act_power || 0,
+    aprt_power: result.aprt_power || 0,
+    pf: result.pf || 0,
+    freq: result.freq || 0,
+  };
+
+  dataPoints.push(point);
+
+  // Trim to maxLogDuration
+  const maxMs = cfg.maxLog * 60 * 1000;
+  const cutoff = now.getTime() - maxMs;
+  const firstValid = dataPoints.findIndex(p => p.ts.getTime() >= cutoff);
+  if (firstValid > 0) dataPoints.splice(0, firstValid);
+
+  lastPoint = point;
+}
+
+// ── Chart state ───────────────────────────────────────────────────────────────
+let chart       = null;
+let windowSec   = 5;
+let yMaxAuto    = true;
+let yMaxVal     = 3000;
+let displayYMax = 150; // eased scale ceiling
+
+// ── Pan state (drag while paused) ────────────────────────────────────────────
+let pausedAtSec  = 0;     // nowSec captured at moment of pausing
+let panOffset    = 0;     // seconds behind live; 0 = live edge, negative = past
+let isDragging   = false;
+let dragStartX   = 0;
+let dragStartPan = 0;
+let dragMoved    = false;
+let lastDragX    = 0;
+let lastDragT    = 0;
+let dragVelPx    = 0;     // px/ms at release
+let momentumId   = null;
+
+// ── Peek state (drag while live → spring back) ────────────────────────────────
+let dragAutoPaused = false; // true when drag auto-paused a live chart
+let springBackId   = null;  // rAF for spring-back to live
+
+// ── Live edge helper ─────────────────────────────────────────────────────────
+// Returns the right-edge timestamp for the chart view.
+// When connected: current wall-clock minus one poll-interval.
+// When disconnected: the last data point's timestamp (data is frozen).
+function liveEdgeSec() {
+  const n = dataPoints.length;
+  if (connState === 'connected' || connState === 'paused') {
+    return Date.now() / 1000 - 1 / getConfig().rate;
+  }
+  return n > 0 ? dataPoints[n - 1].tsSec : Date.now() / 1000;
+}
+
+// ── Overlay positioning ───────────────────────────────────────────────────────
+function positionOverlays() {
+  if (!chart) return;
+  const dpr = devicePixelRatio || 1;
+  const b   = chart.bbox;
+  const pl  = b.left   / dpr;
+  const pt  = b.top    / dpr;
+  const pw  = b.width  / dpr;
+  const ph  = b.height / dpr;
+  const c   = document.getElementById('chart-container');
+  const rightInset = (c.offsetWidth  - pl - pw + 8) + 'px';
+  const tooltip = document.getElementById('cursor-tooltip');
+  tooltip.style.top   = (pt + 8) + 'px';
+  tooltip.style.right = rightInset;
+  const pauseEl = document.getElementById('pause-overlay');
+  pauseEl.style.bottom = (c.offsetHeight - pt - ph + 8) + 'px';
+  pauseEl.style.right  = rightInset;
+}
+
+// ── Build uPlot ───────────────────────────────────────────────────────────────
+function buildChart() {
+  const container = document.getElementById('chart-container');
+  const w = container.offsetWidth || 900;
+  const thinW = 1 / (window.devicePixelRatio || 1);
+
+  const h = container.offsetHeight || 420;
+
+  chart = new uPlot({
+    width:   w,
+    height:  h,
+    padding: [22, 16, 0, 0],
+    cursor: {
+      drag:  { x: false, y: false },
+      sync:  { key: null },
+    },
+    select: { show: false },
+    legend: { show: false },
+    axes: [
+      {
+        // x — seconds labels
+        stroke: '#666e80',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { stroke: 'rgba(80,100,128,0.25)', width: thinW },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   32,
+        incrs:  [1, 2, 5, 10, 15, 20, 30, 60],
+        space:  44,
+        values: (_u, vals) => vals.map(v => {
+          if (v == null) return '';
+          return ':' + String(new Date(v * 1000).getSeconds()).padStart(2, '0');
+        }),
+      },
+      {
+        // left y — Watts
+        scale:  'w',
+        stroke: '#9499a8',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { stroke: 'rgba(80,100,128,0.25)', width: thinW },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   58,
+        values: (_u, vals) => vals.map(v => v == null ? '' : Math.round(v) + 'W'),
+      },
+      {
+        // right y — Volts
+        scale:  'v',
+        side:   1,
+        stroke: '#9499a8',
+        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        grid:   { show: false },
+        font:   '11px Inter, system-ui, sans-serif',
+        size:   42,
+        values: (_u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + 'V'),
+      },
+      {
+        // right y — Amps (hidden scale for auto-range)
+        scale: 'i',
+        side:  1,
+        show:  false,
+      },
+    ],
+    series: [
+      {},
+      { label:'Power',   scale:'w', stroke:'#FFE033', width:0.7, points:{show:false}, fill:'rgba(255,224,51,0.05)' },
+      { label:'Voltage', scale:'v', stroke:'#00D4D4', width:0.6, points:{show:false} },
+      { label:'Current', scale:'i', stroke:'#FF5FFF', width:0.6, points:{show:false} },
+    ],
+    scales: {
+      x: { time: true },
+      w: { auto: true, range: (_u, _min, dataMax) => {
+        if (!yMaxAuto) return [0, yMaxVal];
+        const target = Math.max(dataMax * 1.55, 150);
+        if (target >= displayYMax) {
+          displayYMax += (target - displayYMax) * 0.14;
+        } else {
+          displayYMax += (target - displayYMax) * 0.05;
+        }
+        return [0, displayYMax];
+      }},
+      v: { range: () => [0, 250] },
+      i: { auto: true },
+    },
+    hooks: {
+      drawClear: [u => {
+        const { left, top, width, height } = u.bbox;
+        u.ctx.fillStyle = '#0d0f14';
+        u.ctx.fillRect(left, top, width, height);
+      }],
+      draw: [u => {
+        const { left, top, width, height } = u.bbox;
+        u.ctx.save();
+        const l = Math.floor(left)         + 0.5;
+        const t = Math.floor(top)          + 0.5;
+        const r = Math.floor(left + width) + 0.5;
+        const b = Math.floor(top + height) + 0.5;
+        u.ctx.strokeStyle = '#506480';
+        u.ctx.lineWidth = 1;
+        u.ctx.strokeRect(l, t, r - l, b - t);
+        u.ctx.restore();
+      }],
+      setCursor: [u => {
+        const idx = u.cursor.idx;
+        if (idx == null || !u.data[1] || u.data[1][idx] == null) {
+          tipEl.style.display = 'none';
+          return;
+        }
+        tipW.textContent = Math.round(u.data[1][idx]).toLocaleString();
+        tipV.textContent = u.data[2][idx].toFixed(1);
+        tipI.textContent = u.data[3][idx].toFixed(2);
+        tipEl.style.display = 'flex';
+      }],
+    },
+  }, [[], [], [], []], container);
+}
+
+let chartBufLen = 0;
+let chartTs, chartPw, chartVt, chartCr;
+
+function updateChartData() {
+  if (!chart) return;
+  const n = dataPoints.length;
+  if (n === 0) return;
+
+  // Resize typed arrays only when needed (double when too small)
+  if (n > chartBufLen) {
+    chartBufLen = Math.max(n, chartBufLen * 2 || 1024);
+    chartTs = new Float64Array(chartBufLen);
+    chartPw = new Float64Array(chartBufLen);
+    chartVt = new Float64Array(chartBufLen);
+    chartCr = new Float64Array(chartBufLen);
+  }
+
+  for (let i = 0; i < n; i++) {
+    chartTs[i] = dataPoints[i].tsSec;
+    chartPw[i] = dataPoints[i].act_power;
+    chartVt[i] = dataPoints[i].voltage;
+    chartCr[i] = dataPoints[i].current;
+  }
+
+  // Pass subarray views so uPlot sees the correct length
+  chart.setData([
+    chartTs.subarray(0, n),
+    chartPw.subarray(0, n),
+    chartVt.subarray(0, n),
+    chartCr.subarray(0, n),
+  ]);
+
+  const edge = liveEdgeSec();
+  if (springBackId) {
+    // spring-back animation owns the x-scale — don't touch it here
+  } else if (dragAutoPaused) {
+    chart.setScale('x', { min: pausedAtSec + panOffset - windowSec, max: pausedAtSec + panOffset });
+  } else if (!isPaused) {
+    chart.setScale('x', { min: edge - windowSec, max: edge });
+  } else {
+    applyPan();
+  }
+}
+
+// ── Pause overlay helpers ─────────────────────────────────────────────────────
+const pauseOverlay = document.getElementById('pause-overlay');
+
+function fmtHMS(sec) {
+  const d = new Date(Math.round(sec) * 1000);
+  return d.getHours().toString().padStart(2, '0') + ':' +
+         d.getMinutes().toString().padStart(2, '0') + ':' +
+         d.getSeconds().toString().padStart(2, '0');
+}
+
+function updatePauseOverlay() {
+  if (!isPaused) { pauseOverlay.style.display = 'none'; return; }
+  const maxSec = pausedAtSec + panOffset;
+  const minSec = maxSec - windowSec;
+  pauseOverlay.textContent = fmtHMS(minSec) + '\u2009\u2013\u2009' + fmtHMS(maxSec);
+  pauseOverlay.style.display = 'flex';
+}
+
+// ── Pan helpers ───────────────────────────────────────────────────────────────
+function plotWidthPx() {
+  return Math.max(chart.width - 110, 100);
+}
+function pxToSec(px) { return (px / plotWidthPx()) * windowSec; }
+
+function applyPan() {
+  const n = dataPoints.length;
+  const maxBack = n > 1 ? (dataPoints[n - 1].tsSec - dataPoints[0].tsSec) : 0;
+  panOffset = Math.max(-maxBack, Math.min(0, panOffset));
+  chart.setScale('x', { min: pausedAtSec + panOffset - windowSec, max: pausedAtSec + panOffset });
+  updatePauseOverlay();
+}
+
+function cancelMomentum() {
+  if (momentumId) { cancelAnimationFrame(momentumId); momentumId = null; }
+}
+
+function startMomentum(initVel) {
+  cancelMomentum();
+  if (Math.abs(initVel) < 0.05) return;
+  let vel = initVel;
+  let last = performance.now();
+  function step(now) {
+    const dt = Math.min(now - last, 50);
+    last = now;
+    panOffset -= pxToSec(vel * dt);
+    const n = dataPoints.length;
+    const maxBack = n > 1 ? (dataPoints[n - 1].tsSec - dataPoints[0].tsSec) : 0;
+    const clamped = Math.max(-maxBack, Math.min(0, panOffset));
+    if (clamped !== panOffset) { panOffset = clamped; applyPan(); momentumId = null; return; }
+    vel *= Math.pow(0.92, dt / 16);
+    applyPan();
+    momentumId = Math.abs(vel) > 0.005 ? requestAnimationFrame(step) : null;
+  }
+  momentumId = requestAnimationFrame(step);
+}
+
+function cancelSpringBack() {
+  if (springBackId) { cancelAnimationFrame(springBackId); springBackId = null; }
+}
+
+function startSpringBack() {
+  cancelMomentum();
+  cancelSpringBack();
+  function step() {
+    panOffset *= 0.72;
+    const edge = liveEdgeSec();
+    if (Math.abs(panOffset) < 0.02) {
+      panOffset = 0;
+      chart.setScale('x', { min: edge - windowSec, max: edge });
+      springBackId = null;
+      return;
+    }
+    chart.setScale('x', { min: edge - windowSec + panOffset, max: edge + panOffset });
+    springBackId = requestAnimationFrame(step);
+  }
+  springBackId = requestAnimationFrame(step);
+}
+
+// ── KPI updates ───────────────────────────────────────────────────────────────
+const elV   = document.getElementById('val-v');
+const elI   = document.getElementById('val-i');
+const elW   = document.getElementById('val-w');
+const tipEl = document.getElementById('cursor-tooltip');
+const tipW  = document.getElementById('tip-w');
+const tipV  = document.getElementById('tip-v');
+const tipI  = document.getElementById('tip-i');
+let ymaxLabelEl = null;
+let lastKPIMs = 0;
+
+function updateKPIs(point) {
+  const nowMs = Date.now();
+  if (nowMs - lastKPIMs < 250) return;
+  lastKPIMs = nowMs;
+  elV.textContent = point.voltage.toFixed(1);
+  elI.textContent = point.current.toFixed(2);
+  elW.textContent = Math.round(point.act_power).toLocaleString();
+  if (ymaxLabelEl && yMaxAuto) ymaxLabelEl.textContent = Math.round(displayYMax) + 'W';
+}
+
+// ── Info panel updates ────────────────────────────────────────────────────────
+function updateInfo() {
+  document.getElementById('info-samples').textContent = dataPoints.length.toLocaleString();
+
+  if (dataPoints.length >= 2) {
+    const spanMs = dataPoints[dataPoints.length - 1].ts.getTime() - dataPoints[0].ts.getTime();
+    const spanSec = Math.round(spanMs / 1000);
+    if (spanSec < 60) {
+      document.getElementById('info-duration').textContent = spanSec + 's';
+    } else if (spanSec < 3600) {
+      const m = Math.floor(spanSec / 60);
+      const s = spanSec % 60;
+      document.getElementById('info-duration').textContent = m + 'm ' + s + 's';
+    } else {
+      const h = Math.floor(spanSec / 3600);
+      const m = Math.floor((spanSec % 3600) / 60);
+      document.getElementById('info-duration').textContent = h + 'h ' + m + 'm';
+    }
+  } else {
+    document.getElementById('info-duration').textContent = '0s';
+  }
+}
+
+// ── Pause / resume (when connected) ──────────────────────────────────────────
+function setPausedState(paused, animate) {
+  if (paused) {
+    isPaused = true;
+    cancelMomentum();
+    cancelSpringBack();
+    pausedAtSec = liveEdgeSec();
+    panOffset = 0;
+    if (connState === 'connected') setConnState('paused');
+    updatePauseOverlay();
+  } else {
+    // Calculate where the view currently sits relative to live
+    const currentMax = pausedAtSec + panOffset;
+    const edge = liveEdgeSec();
+    const gap = currentMax - edge;  // negative = behind live
+
+    isPaused = false;
+    pausedAtSec = 0;
+    cancelMomentum();
+    dragAutoPaused = false;
+    if (connState === 'paused') setConnState('connected');
+    updatePauseOverlay();
+
+    if (animate && Math.abs(gap) > 0.02) {
+      panOffset = gap;
+      startSpringBack();
+    } else {
+      panOffset = 0;
+      cancelSpringBack();
+    }
+  }
+}
+
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportCSV() {
+  if (dataPoints.length === 0) return;
+  const lines = ['timestamp,voltage,current,act_power,aprt_power,pf,freq'];
+  for (const p of dataPoints) {
+    lines.push(
+      p.ts.toISOString() + ',' +
+      p.voltage + ',' +
+      p.current + ',' +
+      p.act_power + ',' +
+      p.aprt_power + ',' +
+      p.pf + ',' +
+      p.freq
+    );
+  }
+  const csv = lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'shelly-em-' + ts + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+
+  // Load config; if none exists, expand settings panel before chart build
+  const saved = loadConfig();
+  const firstVisit = !saved;
+  applyConfig(saved || defaultConfig);
+
+  const settingsBtn = document.getElementById('settings-btn');
+  const settingsPanel = document.getElementById('settings-panel');
+
+  function toggleSettings(forceOpen) {
+    const shouldOpen = forceOpen !== undefined ? forceOpen : !settingsPanel.classList.contains('open');
+    settingsPanel.classList.toggle('open', shouldOpen);
+    settingsBtn.classList.toggle('active', shouldOpen);
+  }
+
+  if (firstVisit) {
+    toggleSettings(true);
+  }
+
+  requestAnimationFrame(() => {
+
+    // Build chart
+    buildChart();
+    const initNow = Date.now() / 1000;
+    chart.setScale('x', { min: initNow - windowSec, max: initNow });
+    positionOverlays();
+    chart.setSeries(3, { show: false });
+    document.querySelector('.kpi-card[data-s="2"]').classList.add('series-off');
+
+    // KPI card toggles
+    document.querySelectorAll('.kpi-card[data-s]').forEach(card => {
+      card.addEventListener('click', () => {
+        const isOff = card.classList.toggle('series-off');
+        chart.setSeries(parseInt(card.dataset.s) + 1, { show: !isOff });
+      });
+    });
+
+    // Window slider
+    const winSlider = document.getElementById('win-slider');
+    const winLabel  = document.getElementById('win-label');
+
+    function updateWinSliderMax() {
+      const maxSec = getConfig().maxLog * 60;
+      winSlider.max = maxSec;
+      if (windowSec > maxSec) {
+        windowSec = maxSec;
+        winSlider.value = maxSec;
+        winLabel.textContent = maxSec + 's';
+      }
+    }
+    updateWinSliderMax();
+
+    winSlider.addEventListener('input', () => {
+      windowSec = parseInt(winSlider.value);
+      winLabel.textContent = windowSec + 's';
+      if (!renderInterval && chart) {
+        const edge = liveEdgeSec();
+        chart.setScale('x', { min: edge - windowSec, max: edge });
+      }
+    });
+
+    // Y-max controls
+    const ymaxSlider = document.getElementById('ymax-slider');
+    const ymaxLabel  = document.getElementById('ymax-label');
+    const ymaxAuto   = document.getElementById('ymax-auto');
+    ymaxLabelEl = ymaxLabel;
+    ymaxSlider.addEventListener('input', () => {
+      yMaxVal = parseInt(ymaxSlider.value);
+      ymaxLabel.textContent = yMaxVal.toLocaleString() + 'W';
+    });
+    ymaxAuto.addEventListener('change', () => {
+      yMaxAuto = ymaxAuto.checked;
+      ymaxSlider.disabled = yMaxAuto;
+      if (!yMaxAuto) ymaxLabel.textContent = yMaxVal.toLocaleString() + 'W';
+    });
+
+    // Settings panel toggle
+    settingsBtn.addEventListener('click', () => toggleSettings());
+
+    // Numeric-only enforcement and live warnings
+    ['cfg-port','cfg-rate','cfg-drawrate','cfg-maxlog'].forEach(id => {
+      document.getElementById(id).addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+        refreshWarnings();
+      });
+    });
+
+    function refreshWarnings() {
+      const cfg = getConfig();
+      const anyWarn = cfg.rate > 5 || cfg.drawRate > 30 || cfg.maxLog > 60;
+      document.getElementById('cfg-rate').classList.toggle('warn', cfg.rate > 5);
+      document.getElementById('cfg-drawrate').classList.toggle('warn', cfg.drawRate > 30);
+      document.getElementById('cfg-maxlog').classList.toggle('warn', cfg.maxLog > 60);
+      document.getElementById('warn-row').style.display = anyWarn ? '' : 'none';
+    }
+    refreshWarnings();
+
+    // Save config on input change
+    document.querySelectorAll('.settings-input').forEach(input => {
+      input.addEventListener('change', () => { saveConfig(getConfig()); updateWinSliderMax(); refreshWarnings(); });
+    });
+
+    // Connect / Disconnect button
+    const connBtn = document.getElementById('conn-btn');
+    connBtn.addEventListener('click', () => {
+      if (connState === 'disconnected') {
+        saveConfig(getConfig());
+        wsConnect();
+      } else {
+        wsDisconnect();
+      }
+    });
+
+    // Play / Pause button
+    const playpauseBtn = document.getElementById('playpause-btn');
+    playpauseBtn.addEventListener('click', () => {
+      if (connState === 'connected') {
+        setPausedState(true);
+      } else if (connState === 'paused') {
+        setPausedState(false, true);
+      }
+    });
+
+    // CSV export
+    document.getElementById('csv-btn').addEventListener('click', exportCSV);
+
+    // Drag-to-pan while paused
+    const chartEl = document.getElementById('chart-container');
+
+    // Scroll wheel changes window size
+    chartEl.addEventListener('wheel', e => {
+      e.preventDefault();
+      const step = e.deltaY > 0 ? 5 : -5;
+      windowSec = Math.min(getConfig().maxLog * 60, Math.max(5, windowSec + step));
+      winSlider.value = windowSec;
+      winLabel.textContent = windowSec + 's';
+      if (!renderInterval && chart) {
+        const edge = liveEdgeSec();
+        chart.setScale('x', { min: edge - windowSec, max: edge });
+      }
+    }, { passive: false });
+
+    chartEl.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      isDragging = true; dragMoved = false;
+      dragStartX = e.clientX; dragStartPan = panOffset;
+      lastDragX = e.clientX; lastDragT = performance.now();
+      dragVelPx = 0; cancelMomentum(); cancelSpringBack();
+      if (isPaused) e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      if (Math.abs(e.clientX - dragStartX) > 4) dragMoved = true;
+      const dt = performance.now() - lastDragT;
+      if (dt > 0) dragVelPx = (e.clientX - lastDragX) / dt;
+      lastDragX = e.clientX; lastDragT = performance.now();
+      if (!isPaused && dragMoved && !dragAutoPaused) {
+        dragAutoPaused = true;
+        pausedAtSec = liveEdgeSec();
+        dragStartX = e.clientX; dragStartPan = 0; panOffset = 0;
+      }
+      if (dragAutoPaused || isPaused) {
+        panOffset = dragStartPan - pxToSec(e.clientX - dragStartX);
+        applyPan();
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (dragAutoPaused) {
+        dragAutoPaused = false;
+        startSpringBack();
+      } else if (isPaused && dragMoved) {
+        startMomentum(dragVelPx);
+      }
+    });
+
+    // Touch support
+    chartEl.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      isDragging = true; dragMoved = false;
+      dragStartX = t.clientX; dragStartPan = panOffset;
+      lastDragX = t.clientX; lastDragT = performance.now();
+      dragVelPx = 0; cancelMomentum(); cancelSpringBack();
+    }, { passive: true });
+
+    chartEl.addEventListener('touchmove', e => {
+      if (!isDragging) return;
+      const t = e.touches[0];
+      const dt = performance.now() - lastDragT;
+      if (dt > 0) dragVelPx = (t.clientX - lastDragX) / dt;
+      lastDragX = t.clientX; lastDragT = performance.now();
+      if (Math.abs(t.clientX - dragStartX) > 10) dragMoved = true;
+      if (!isPaused && dragMoved && !dragAutoPaused) {
+        dragAutoPaused = true;
+        pausedAtSec = liveEdgeSec();
+        dragStartX = t.clientX; dragStartPan = 0; panOffset = 0;
+      }
+      if (dragAutoPaused || isPaused) {
+        panOffset = dragStartPan - pxToSec(t.clientX - dragStartX);
+        applyPan();
+      }
+    }, { passive: true });
+
+    chartEl.addEventListener('touchend', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (dragAutoPaused) {
+        dragAutoPaused = false;
+        startSpringBack();
+      } else if (isPaused && dragMoved) {
+        startMomentum(dragVelPx);
+      }
+    });
+
+    // Snap to PNG
+    document.getElementById('snap-btn').addEventListener('click', () => {
+      const canvas = document.querySelector('#chart-container canvas');
+      if (!canvas) return;
+      const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = 'power-monitor-' + ts + '.png';
+      a.click();
+    });
+
+    // Resize handler
+    function resizeChart() {
+      const container = document.getElementById('chart-container');
+      const w = container.offsetWidth;
+      const h = container.offsetHeight;
+      if (chart && w > 0 && h > 0) {
+        chart.setSize({ width: w, height: h });
+        positionOverlays();
+      }
+    }
+    window.addEventListener('resize', resizeChart);
+    window.addEventListener('orientationchange', () => setTimeout(resizeChart, 200));
+    new ResizeObserver(resizeChart).observe(document.getElementById('chart-container'));
+    requestAnimationFrame(resizeChart);
+  });
+});
+
+}());
+</script>
+</body>
+</html>
