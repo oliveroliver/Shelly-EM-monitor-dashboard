@@ -1,0 +1,62 @@
+Build Report
+============
+
+ 1. Read sources
+    attoplot.js  19,630 bytes
+    index.html   46,972 bytes
+
+ 2. Extract class/ID names
+    55 classes, 28 IDs
+
+ 3. Validate names
+
+ 4. Bundle JS (Bun transpiler)
+    48,741 → 31,648 bytes (35.1% reduction)
+    minifies: whitespace, identifiers, syntax
+
+ 5. Inline JS into HTML
+
+ 6. Rename classes/IDs
+    55 classes + 28 IDs → 1-2 char names
+
+ 7. Minify HTML (html-minifier-terser)
+    47,137 → 31,516 bytes (33.1% reduction)
+    options: collapseWhitespace, removeComments,
+             minifyCSS, minifyJS (terser 2-pass)
+
+ 8. Gzip
+    index.html  31,516 → 10,836 bytes (level 9)
+
+ 9. Base64
+    index.html.gz  10,836 → 14,448 bytes
+
+10. Write dist/
+
+Build complete: no warnings or errors
+
+Output Files
+============
+
+  dist/index.html        31,516 bytes  Minified single-file app (JS+CSS inlined)
+  dist/index.html.gz     10,836 bytes  Gzip-compressed index.html
+  dist/index.html.gz.b64 14,448 bytes  Base64 of gzip (for firmware embedding)
+
+Size Comparison
+===============
+
+  uPlot 1.6.31 (JS + CSS, reference):
+    source:   149,228 bytes
+    minified:  52,169 bytes
+    gzip min:  22,488 bytes
+
+  attoplot.js (standalone):
+    source:   19,630 bytes
+    minified:  8,260 bytes
+    gzip min:  3,376 bytes
+
+  index.html (attoplot.js inlined):
+    source:   46,972 bytes
+    minified: 31,516 bytes
+    gzip min: 10,836 bytes
+    base64 gz: 14,448 bytes
+
