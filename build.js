@@ -28,7 +28,8 @@ const CLASS_NAMES = [
   "is-active", "is-paused", "kpi-label", "kpi-value", "tip-unit",
   "kpi-unit", "kpi-card", "conn-btn", "attoplot", "kpi-row", "info-row",
   "info-key", "info-val", "tip-row", "tip-dot", "tip-val", "pp-icon",
-  "sidebar", "content", "active", "open", "warn", "btn",
+  "sidebar", "content", "btn-group", "warn-text", "divider",
+  "active", "open", "warn", "btn",
 ].sort((a, b) => b.length - a.length);
 
 // All ID values used in the project — sorted longest-first for same reason.

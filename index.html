@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Power Monitor — Shelly EM</title>
-  <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css"> -->
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -22,12 +21,12 @@
     /* ── Sidebar ── */
     .sidebar { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
 
+    /* ── Shared card style ── */
+    .kpi-card, .ctrl-card, .device-bar, .chart-card { background: #161920; border: 1px solid #5c6880; border-radius: 10px; }
+
     /* ── KPI cards ── */
     .kpi-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
     .kpi-card {
-      background: #161920;
-      border: 1px solid #5c6880;
-      border-radius: 10px;
       padding: 10px;
       cursor: pointer;
       user-select: none;
@@ -38,10 +37,10 @@
     .kpi-card.power-card   { border-left: 3px solid #FFE033; }
     .kpi-card.voltage-card { border-left: 3px solid #00D4D4; }
     .kpi-card.current-card { border-left: 3px solid #FF5FFF; }
+    .kpi-label, .settings-key, .info-key { font-size: 10px; font-weight: 600; text-transform: uppercase; color: #555b6a; }
     .kpi-label {
-      font-size: 10px; font-weight: 600;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: #555b6a; margin-bottom: 6px;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
     }
     .kpi-value-row { display: flex; align-items: baseline; gap: 3px; }
     .kpi-value {
@@ -52,17 +51,11 @@
     .kpi-unit { font-size: 0.875rem; color: #9499a8; }
     /* ── Controls card ── */
     .ctrl-card {
-      background: #161920;
-      border: 1px solid #5c6880;
-      border-radius: 10px;
       overflow: hidden;
     }
 
     /* ── Device bar ── */
     .device-bar {
-      background: #161920;
-      border: 1px solid #5c6880;
-      border-radius: 10px;
       padding: 10px;
       overflow: hidden;
     }
@@ -91,6 +84,10 @@
 
     /* Settings button */
     .settings-btn { gap: 4px; }
+    .btn-group { display: flex; align-items: center; gap: 10px; }
+    .btn svg { width: 14px; height: 14px; stroke-linecap: round; stroke-linejoin: round; }
+    .divider { border-top: 1px solid #2a3040; margin: 5px 0; }
+    .warn-text { color: #f59e0b; white-space: normal; line-height: 1.4; }
     /* Settings panel */
     .settings-panel { max-height: 0; overflow: hidden; transition: max-height 0.28s ease; }
     .settings-panel.open { max-height: 500px; }
@@ -104,7 +101,7 @@
       display: flex; justify-content: space-between; align-items: center; gap: 8px;
       min-height: 21px;
     }
-    .settings-key { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #555b6a; }
+    .settings-key { letter-spacing: 0.06em; }
     .settings-unit { font-size: 10px; color: #555b6a; font-family: 'SF Mono', 'Fira Code', monospace; margin-left: auto; }
     .settings-input {
       width: 120px; padding: 3px 6px;
@@ -120,7 +117,7 @@
     .settings-input.warn { color: #f59e0b; }
 
     /* Info rows (inside settings panel) */
-    .info-key { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #555b6a; }
+    .info-key { letter-spacing: 0.06em; }
     .info-val { font-size: 11px; color: #9499a8; font-family: 'SF Mono', 'Fira Code', monospace; letter-spacing: 0.02em; }
 
 
@@ -130,7 +127,7 @@
     }
     @keyframes glow-green {
       0%,100% { box-shadow: 0 0 4px 1px rgba(34,197,94,0.35); border-color: rgba(34,197,94,0.5); }
-      50%     { box-shadow: 0 0 6px 1px rgba(34,197,94,0.42); border-color: rgba(34,197,94,0.65); }
+      50%     { box-shadow: 0 0 8px 2px rgba(34,197,94,0.55); border-color: rgba(34,197,94,0.8); }
     }
 
     /* Connection controls wrapper — no border, just spacing */
@@ -234,9 +231,6 @@
 
     /* ── Chart card ── */
     .chart-card {
-      background: #161920;
-      border: 1px solid #5c6880;
-      border-radius: 10px;
       overflow: hidden;
       flex: 1;
       min-height: 0;
@@ -246,9 +240,7 @@
     .chart-wrapper { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
     #chart-container { background: #0d0f14; flex: 1; min-height: 0; }
 
-    /* ── uPlot overrides ── */
-    /* .uplot { background: transparent !important; } */
-    /* .u-cursor-x, .u-cursor-y { border-color: #506480 !important; } */
+    /* ── Chart overrides ── */
     .attoplot { background: transparent !important; }
     .ap-cursor-x, .ap-cursor-y { border-color: #506480 !important; }
 
@@ -369,7 +361,7 @@
         <div class="settings-panel-inner">
           <div class="info-row"><span class="info-key">Samples</span><span class="info-val" id="info-samples">0</span></div>
           <div class="info-row"><span class="info-key">Duration</span><span class="info-val" id="info-duration">0s</span></div>
-          <div style="border-top:1px solid #2a3040; margin-top:5px; margin-bottom:5px;"></div>
+          <div class="divider"></div>
           <div class="settings-row">
             <span class="settings-key">Host</span>
             <input class="settings-input" type="text" id="cfg-host" value="localhost" placeholder="IP or hostname">
@@ -394,27 +386,27 @@
             <input class="settings-input" type="text" inputmode="numeric" id="cfg-maxlog" value="10" placeholder="10">
           </div>
           <div id="warn-row" style="display:none">
-            <div style="border-top:1px solid #2a3040; margin-top:5px; margin-bottom:10px;"></div>
+            <div class="divider" style="margin-bottom:10px"></div>
             <div style="text-align:center">
-              <span class="settings-key" style="color:#f59e0b;white-space:normal;line-height:1.4">Poll rates &gt;5 may cause issues with Shelly EM. Other high values may impact browser performance or stability.</span>
+              <span class="settings-key warn-text">Poll rates &gt;5 may cause issues with Shelly EM. Other high values may impact browser performance or stability.</span>
             </div>
           </div>
         </div>
       </div>
       <div class="device-bar-top">
-        <div style="display:flex;align-items:center;gap:10px;">
+        <div class="btn-group">
           <button class="btn settings-btn" id="settings-btn" title="Settings">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
           </button>
           <button class="btn" id="csv-btn" title="Download CSV">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
           </button>
           <button class="btn" id="snap-btn" title="Download chart as PNG">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
               <circle cx="12" cy="13" r="4"/>
             </svg>
@@ -422,11 +414,11 @@
         </div>
         <div class="conn-controls" id="conn-controls">
           <button class="btn playpause-btn" id="playpause-btn" title="Play / Pause" aria-label="Pause">
-            <svg class="pp-icon pp-icon-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <svg class="pp-icon pp-icon-pause" viewBox="0 0 24 24" fill="currentColor">
               <rect x="6" y="4" width="4" height="16" rx="1"/>
               <rect x="14" y="4" width="4" height="16" rx="1"/>
             </svg>
-            <svg class="pp-icon pp-icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <svg class="pp-icon pp-icon-play" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,3 19,12 5,21"/>
             </svg>
           </button>
@@ -482,11 +474,9 @@
 
 </div>
 
-<!-- <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script> -->
 <script src="attoplot.js"></script>
 <script>
 (function () {
-'use strict';
 
 // ── Data store ────────────────────────────────────────────────────────────────
 // Each entry: { ts: Date, tsSec: number, voltage, current, act_power, aprt_power, pf, freq }
@@ -510,21 +500,32 @@ function saveConfig(cfg) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg)); } catch (e) { /* ignore */ }
 }
 
+// ── Cached DOM refs ──────────────────────────────────────────────────────────
+const cfgHost     = document.getElementById('cfg-host');
+const cfgPort     = document.getElementById('cfg-port');
+const cfgRate     = document.getElementById('cfg-rate');
+const cfgDrawrate = document.getElementById('cfg-drawrate');
+const cfgMaxlog   = document.getElementById('cfg-maxlog');
+const elSamples   = document.getElementById('info-samples');
+const elDuration  = document.getElementById('info-duration');
+const deviceBar   = document.querySelector('.device-bar');
+const elWarnRow   = document.getElementById('warn-row');
+
 function getConfig() {
-  const host = document.getElementById('cfg-host').value.trim() || serverIp;
-  const port = Math.max(1, parseInt(document.getElementById('cfg-port').value) || 80);
-  const rate = Math.max(1, Math.min(60, parseInt(document.getElementById('cfg-rate').value) || 2));
-  const drawRate = Math.max(1, Math.min(60, parseInt(document.getElementById('cfg-drawrate').value) || 30));
-  const maxLog = Math.max(1, parseInt(document.getElementById('cfg-maxlog').value) || 10);
+  const host = cfgHost.value.trim() || serverIp;
+  const port = Math.max(1, parseInt(cfgPort.value) || 80);
+  const rate = Math.max(1, Math.min(60, parseInt(cfgRate.value) || 2));
+  const drawRate = Math.max(1, Math.min(60, parseInt(cfgDrawrate.value) || 30));
+  const maxLog = Math.max(1, parseInt(cfgMaxlog.value) || 10);
   return { host, port, rate, drawRate, maxLog };
 }
 
 function applyConfig(cfg) {
-  document.getElementById('cfg-host').value = cfg.host;
-  document.getElementById('cfg-port').value = cfg.port;
-  document.getElementById('cfg-rate').value = cfg.rate;
-  document.getElementById('cfg-drawrate').value = cfg.drawRate || 30;
-  document.getElementById('cfg-maxlog').value = cfg.maxLog;
+  cfgHost.value = cfg.host;
+  cfgPort.value = cfg.port;
+  cfgRate.value = cfg.rate;
+  cfgDrawrate.value = cfg.drawRate || 30;
+  cfgMaxlog.value = cfg.maxLog;
 }
 
 // ── WebSocket connection ──────────────────────────────────────────────────────
@@ -541,7 +542,6 @@ let connState = 'disconnected';
 
 function setConnState(state, extra) {
   connState = state;
-  const deviceBar    = document.querySelector('.device-bar');
   const connBtn      = document.getElementById('conn-btn');
   const playpauseBtn = document.getElementById('playpause-btn');
 
@@ -633,9 +633,6 @@ function wsConnect() {
     }
   };
 
-  ws.onerror = function () {
-    // onclose will fire after this
-  };
 }
 
 function sendPoll() {
@@ -774,10 +771,14 @@ function positionOverlays() {
 }
 
 // ── Build uPlot ───────────────────────────────────────────────────────────────
+const AXIS_FONT = '11px Inter, system-ui, sans-serif';
+
 function buildChart() {
   const container = document.getElementById('chart-container');
   const w = container.offsetWidth || 900;
   const thinW = 1 / (window.devicePixelRatio || 1);
+  const tick = { stroke: '#506480', width: thinW, size: 5 };
+  const grid = { stroke: 'rgba(80,100,128,0.25)', width: thinW };
 
   const h = container.offsetHeight || 420;
 
@@ -795,9 +796,9 @@ function buildChart() {
       {
         // x — seconds labels
         stroke: '#666e80',
-        ticks:  { stroke: '#506480', width: thinW, size: 5 },
-        grid:   { stroke: 'rgba(80,100,128,0.25)', width: thinW },
-        font:   '11px Inter, system-ui, sans-serif',
+        ticks:  tick,
+        grid:   grid,
+        font:   AXIS_FONT,
         size:   32,
         incrs:  [1, 2, 5, 10, 15, 20, 30, 60],
         space:  44,
@@ -810,9 +811,9 @@ function buildChart() {
         // left y — Watts
         scale:  'w',
         stroke: '#9499a8',
-        ticks:  { stroke: '#506480', width: thinW, size: 5 },
-        grid:   { stroke: 'rgba(80,100,128,0.25)', width: thinW },
-        font:   '11px Inter, system-ui, sans-serif',
+        ticks:  tick,
+        grid:   grid,
+        font:   AXIS_FONT,
         size:   58,
         values: (_u, vals) => vals.map(v => v == null ? '' : Math.round(v) + 'W'),
       },
@@ -821,9 +822,9 @@ function buildChart() {
         scale:  'v',
         side:   1,
         stroke: '#9499a8',
-        ticks:  { stroke: '#506480', width: thinW, size: 5 },
+        ticks:  tick,
         grid:   { show: false },
-        font:   '11px Inter, system-ui, sans-serif',
+        font:   AXIS_FONT,
         size:   42,
         values: (_u, vals) => vals.map(v => v == null ? '' : v.toFixed(0) + 'V'),
       },
@@ -1036,24 +1037,24 @@ function updateKPIs(point) {
 
 // ── Info panel updates ────────────────────────────────────────────────────────
 function updateInfo() {
-  document.getElementById('info-samples').textContent = dataPoints.length.toLocaleString();
+  elSamples.textContent = dataPoints.length.toLocaleString();
 
   if (dataPoints.length >= 2) {
     const spanMs = dataPoints[dataPoints.length - 1].ts.getTime() - dataPoints[0].ts.getTime();
     const spanSec = Math.round(spanMs / 1000);
     if (spanSec < 60) {
-      document.getElementById('info-duration').textContent = spanSec + 's';
+      elDuration.textContent = spanSec + 's';
     } else if (spanSec < 3600) {
       const m = Math.floor(spanSec / 60);
       const s = spanSec % 60;
-      document.getElementById('info-duration').textContent = m + 'm ' + s + 's';
+      elDuration.textContent = m + 'm ' + s + 's';
     } else {
       const h = Math.floor(spanSec / 3600);
       const m = Math.floor((spanSec % 3600) / 60);
-      document.getElementById('info-duration').textContent = h + 'h ' + m + 'm';
+      elDuration.textContent = h + 'h ' + m + 'm';
     }
   } else {
-    document.getElementById('info-duration').textContent = '0s';
+    elDuration.textContent = '0s';
   }
 }
 
@@ -1117,9 +1118,7 @@ function exportCSV() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-
-  // Load config; if none exists, expand settings panel before chart build
+// Load config; if none exists, expand settings panel before chart build
   const saved = loadConfig();
   const firstVisit = !saved;
   applyConfig(saved || defaultConfig);
@@ -1198,8 +1197,8 @@ window.addEventListener('DOMContentLoaded', () => {
     settingsBtn.addEventListener('click', () => toggleSettings());
 
     // Numeric-only enforcement and live warnings
-    ['cfg-port','cfg-rate','cfg-drawrate','cfg-maxlog'].forEach(id => {
-      document.getElementById(id).addEventListener('input', function() {
+    [cfgPort, cfgRate, cfgDrawrate, cfgMaxlog].forEach(el => {
+      el.addEventListener('input', function() {
         this.value = this.value.replace(/[^0-9]/g, '');
         refreshWarnings();
       });
@@ -1208,10 +1207,10 @@ window.addEventListener('DOMContentLoaded', () => {
     function refreshWarnings() {
       const cfg = getConfig();
       const anyWarn = cfg.rate > 5 || cfg.drawRate > 30 || cfg.maxLog > 60;
-      document.getElementById('cfg-rate').classList.toggle('warn', cfg.rate > 5);
-      document.getElementById('cfg-drawrate').classList.toggle('warn', cfg.drawRate > 30);
-      document.getElementById('cfg-maxlog').classList.toggle('warn', cfg.maxLog > 60);
-      document.getElementById('warn-row').style.display = anyWarn ? '' : 'none';
+      cfgRate.classList.toggle('warn', cfg.rate > 5);
+      cfgDrawrate.classList.toggle('warn', cfg.drawRate > 30);
+      cfgMaxlog.classList.toggle('warn', cfg.maxLog > 60);
+      elWarnRow.style.display = anyWarn ? '' : 'none';
     }
     refreshWarnings();
 
@@ -1361,7 +1360,6 @@ window.addEventListener('DOMContentLoaded', () => {
     new ResizeObserver(resizeChart).observe(document.getElementById('chart-container'));
     requestAnimationFrame(resizeChart);
   });
-});
 
 }());
 </script>

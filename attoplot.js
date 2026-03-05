@@ -191,8 +191,8 @@ var uPlot = (function () {
     var curX = el('div', 'ap-cursor-x');
     var curY = el('div', 'ap-cursor-y');
 
-    curX.style.cssText = 'position:absolute;pointer-events:none;display:none;top:0;width:0;height:100%;border-left:1px solid rgba(128,128,128,0.5)';
-    curY.style.cssText = 'position:absolute;pointer-events:none;display:none;left:0;width:100%;height:0;border-top:1px solid rgba(128,128,128,0.5)';
+    curX.style.cssText = 'position:absolute;pointer-events:none;display:none;width:0;border-left:1px dashed rgba(128,128,128,0.5)';
+    curY.style.cssText = 'position:absolute;pointer-events:none;display:none;height:0;border-top:1px dashed rgba(128,128,128,0.5)';
     root.appendChild(curX);
     root.appendChild(curY);
 
@@ -227,8 +227,12 @@ var uPlot = (function () {
       var pw = self._plotWidth, ph = self._plotHeight;
       if (cx >= pl && cx <= pl + pw && cy >= pt && cy <= pt + ph) {
         curX.style.left = cx + 'px';
+        curX.style.top = pt + 'px';
+        curX.style.height = ph + 'px';
         curX.style.display = 'block';
         curY.style.top = cy + 'px';
+        curY.style.left = pl + 'px';
+        curY.style.width = pw + 'px';
         curY.style.display = 'block';
         if (self.data[0] && self.data[0].length > 0) {
           var xSc = self._scales.x;
