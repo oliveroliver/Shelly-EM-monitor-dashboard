@@ -711,9 +711,10 @@ function handleResult(result) {
   const maxMs = cfg.maxLog * 60 * 1000;
   const cutoff = now.getTime() - maxMs;
   const firstValid = dataPoints.findIndex(p => p.ts.getTime() >= cutoff);
-  if (firstValid > 0) dataPoints.splice(0, firstValid);
+  if (firstValid > 0) { dataPoints.splice(0, firstValid); chartTrimmed = true; }
 
   lastPoint = point;
+  dataDirty = true;
 }
 
 // ── Chart state ───────────────────────────────────────────────────────────────
@@ -894,35 +895,43 @@ function buildChart() {
 
 let chartBufLen = 0;
 let chartTs, chartPw, chartVt, chartCr;
+let chartCopied = 0, dataDirty = false, chartTrimmed = false;
 
 function updateChartData() {
   if (!chart) return;
   const n = dataPoints.length;
   if (n === 0) return;
 
-  // Resize typed arrays only when needed (double when too small)
-  if (n > chartBufLen) {
-    chartBufLen = Math.max(n, chartBufLen * 2 || 1024);
-    chartTs = new Float64Array(chartBufLen);
-    chartPw = new Float64Array(chartBufLen);
-    chartVt = new Float64Array(chartBufLen);
-    chartCr = new Float64Array(chartBufLen);
-  }
+  if (dataDirty) {
+    dataDirty = false;
 
-  for (let i = 0; i < n; i++) {
-    chartTs[i] = dataPoints[i].tsSec;
-    chartPw[i] = dataPoints[i].act_power;
-    chartVt[i] = dataPoints[i].voltage;
-    chartCr[i] = dataPoints[i].current;
-  }
+    // Resize typed arrays only when needed (double when too small)
+    if (n > chartBufLen) {
+      chartBufLen = Math.max(n, chartBufLen * 2 || 1024);
+      chartTs = new Float64Array(chartBufLen);
+      chartPw = new Float64Array(chartBufLen);
+      chartVt = new Float64Array(chartBufLen);
+      chartCr = new Float64Array(chartBufLen);
+      chartCopied = 0;
+    }
 
-  // Pass subarray views so uPlot sees the correct length
-  chart.setData([
-    chartTs.subarray(0, n),
-    chartPw.subarray(0, n),
-    chartVt.subarray(0, n),
-    chartCr.subarray(0, n),
-  ]);
+    // Full recopy on trim, otherwise just append new points
+    const start = chartTrimmed ? (chartTrimmed = false, 0) : chartCopied;
+    for (let i = start; i < n; i++) {
+      chartTs[i] = dataPoints[i].tsSec;
+      chartPw[i] = dataPoints[i].act_power;
+      chartVt[i] = dataPoints[i].voltage;
+      chartCr[i] = dataPoints[i].current;
+    }
+    chartCopied = n;
+
+    chart.setData([
+      chartTs.subarray(0, n),
+      chartPw.subarray(0, n),
+      chartVt.subarray(0, n),
+      chartCr.subarray(0, n),
+    ]);
+  }
 
   const edge = liveEdgeSec();
   if (springBackId) {
