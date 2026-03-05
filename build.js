@@ -97,6 +97,13 @@ function renameClasses(html) {
   return html;
 }
 
+// ── Terser options (shared) ───────────────────────────────────────────────────
+
+const terserOpts = {
+  compress: { passes: 2, pure_getters: true, unsafe: true, toplevel: true },
+  mangle: { toplevel: true },
+};
+
 // ── Build pipeline ────────────────────────────────────────────────────────────
 
 // 1. Read sources
@@ -144,20 +151,45 @@ const minifiedHtml = await minify(renamedHtml, {
   collapseWhitespace: true,
   removeComments: true,
   minifyCSS: true,
-  minifyJS: true,
+  minifyJS: terserOpts,
 });
+
+// 5.5. Produce standalone attoplot.min.js
+let attoMin = transpiler.transformSync(attoSource).replace(/\s*export\s*\{\s*\}\s*;?\s*$/, "");
+const attoWrapped = await minify(`<script>${attoMin}</script>`, { minifyJS: terserOpts });
+const attoMinCode = attoWrapped.replace(/<\/?script>/g, "");
+const attoMinGz = gzipSync(Buffer.from(attoMinCode), { level: constants.Z_BEST_COMPRESSION });
 
 // 6. Write dist/
 mkdirSync("dist", { recursive: true });
 await Bun.write("dist/index.html", minifiedHtml);
-console.log(`dist/index.html      ${(minifiedHtml.length / 1024).toFixed(1)} KB`);
-
+await Bun.write("dist/attoplot.min.js", attoMinCode);
+await Bun.write("dist/attoplot.min.js.gz", attoMinGz);
 // 7. Gzip (level 9 = maximum compression)
 const gz = gzipSync(Buffer.from(minifiedHtml), { level: constants.Z_BEST_COMPRESSION });
 await Bun.write("dist/index.html.gz", gz);
-console.log(`dist/index.html.gz   ${(gz.length / 1024).toFixed(1)} KB`);
 
 // 8. Base64 of gzip
 const b64 = Buffer.from(gz).toString("base64");
 await Bun.write("dist/index.html.gz.b64", b64);
-console.log(`dist/index.html.gz.b64  ${(b64.length / 1024).toFixed(1)} KB`);
+
+// 9. Build report
+const report = [
+  `uPlot 1.6.31 (JS + CSS, reference):`,
+  `  source:   149,228 bytes`,
+  `  minified:  52,169 bytes`,
+  `  gzip min:  22,488 bytes`,
+  ``,
+  `attoplot.js (standalone):`,
+  `  source:    ${attoSource.length.toLocaleString().padStart(6)} bytes`,
+  `  minified:  ${attoMinCode.length.toLocaleString().padStart(6)} bytes`,
+  `  gzip min:  ${attoMinGz.length.toLocaleString().padStart(6)} bytes`,
+  ``,
+  `index.html (attoplot.js inlined):`,
+  `  source:    ${html.length.toLocaleString().padStart(6)} bytes`,
+  `  minified:  ${minifiedHtml.length.toLocaleString().padStart(6)} bytes`,
+  `  gzip min:  ${gz.length.toLocaleString().padStart(6)} bytes`,
+  `  base64 gz: ${b64.length.toLocaleString().padStart(6)} bytes`,
+].join("\n");
+console.log("\n" + report);
+await Bun.write("dist/build-sizes.txt", report + "\n");

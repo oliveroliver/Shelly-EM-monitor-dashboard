@@ -38,6 +38,14 @@ var uPlot = (function () {
     return lo;
   }
 
+  // Find visible data index range for a given min/max
+  function visRange(arr, min, max) {
+    var i0 = bsearch(arr, min), i1 = bsearch(arr, max);
+    if (i0 > 0) i0--;
+    if (i1 < arr.length - 1) i1++;
+    return [i0, i1];
+  }
+
   // Find the closest data index to a given value
   function closestIdx(arr, val) {
     var idx = bsearch(arr, val);
@@ -174,10 +182,7 @@ var uPlot = (function () {
     // ── DOM setup ──
 
     var root = el('div', 'attoplot');
-    root.style.position = 'relative';
-    root.style.overflow = 'hidden';
-    root.style.width = self._width + 'px';
-    root.style.height = self._height + 'px';
+    root.style.cssText = 'position:relative;overflow:hidden;width:' + self._width + 'px;height:' + self._height + 'px';
 
     var can = el('canvas');
     root.appendChild(can);
@@ -186,32 +191,8 @@ var uPlot = (function () {
     var curX = el('div', 'ap-cursor-x');
     var curY = el('div', 'ap-cursor-y');
 
-    function styleCur(div, vert) {
-      div.style.position = 'absolute';
-      div.style.pointerEvents = 'none';
-      div.style.display = 'none';
-      div.style.borderStyle = 'solid';
-      div.style.borderColor = 'rgba(128,128,128,0.5)';
-      if (vert) {
-        div.style.top = '0';
-        div.style.width = '0';
-        div.style.height = '100%';
-        div.style.borderLeftWidth = '1px';
-        div.style.borderRightWidth = '0';
-        div.style.borderTopWidth = '0';
-        div.style.borderBottomWidth = '0';
-      } else {
-        div.style.left = '0';
-        div.style.width = '100%';
-        div.style.height = '0';
-        div.style.borderTopWidth = '1px';
-        div.style.borderBottomWidth = '0';
-        div.style.borderLeftWidth = '0';
-        div.style.borderRightWidth = '0';
-      }
-    }
-    styleCur(curX, true);
-    styleCur(curY, false);
+    curX.style.cssText = 'position:absolute;pointer-events:none;display:none;top:0;width:0;height:100%;border-left:1px solid rgba(128,128,128,0.5)';
+    curY.style.cssText = 'position:absolute;pointer-events:none;display:none;left:0;width:100%;height:0;border-top:1px solid rgba(128,128,128,0.5)';
     root.appendChild(curX);
     root.appendChild(curY);
 
@@ -302,13 +283,11 @@ var uPlot = (function () {
   // Fire a hook. Render hooks (drawClear, draw) run with the ctx transform
   // reset to identity so that hook code operates in device-pixel space,
   // matching uPlot's convention where bbox values map directly to ctx coords.
-  var renderHooks = { drawClear: 1, draw: 1 };
-
   proto._fire = function (hook) {
     var fns = this._hooks[hook];
     if (!fns) return;
     var ctx = this.ctx;
-    var isRender = renderHooks[hook];
+    var isRender = hook === 'drawClear' || hook === 'draw';
     if (isRender) {
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0); // identity — device pixels
@@ -322,27 +301,25 @@ var uPlot = (function () {
   };
 
   proto._applySize = function () {
-    var self = this;
-    var can = self._can;
-    can.width = self._width * pxRatio;
-    can.height = self._height * pxRatio;
-    can.style.width = self._width + 'px';
-    can.style.height = self._height + 'px';
-    self.ctx.scale(pxRatio, pxRatio);
-    self.root.style.width = self._width + 'px';
-    self.root.style.height = self._height + 'px';
-    self.width = self._width;
-    self._regeom();
+    var can = this._can;
+    can.width = this._width * pxRatio;
+    can.height = this._height * pxRatio;
+    can.style.width = this._width + 'px';
+    can.style.height = this._height + 'px';
+    this.ctx.scale(pxRatio, pxRatio);
+    this.root.style.width = this._width + 'px';
+    this.root.style.height = this._height + 'px';
+    this.width = this._width;
+    this._regeom();
   };
 
   // Recompute plot geometry from axes and padding
   proto._regeom = function () {
-    var self = this;
-    var pad = self._padding;
+    var pad = this._padding;
     var leftSize = 0, rightSize = 0, bottomSize = 0, topSize = 0;
 
-    for (var i = 0; i < self._axes.length; i++) {
-      var ax = self._axes[i];
+    for (var i = 0; i < this._axes.length; i++) {
+      var ax = this._axes[i];
       if (!ax.show) continue;
       var side = ax.side;
       if (side === 2) bottomSize = Math.max(bottomSize, ax.size);       // bottom
@@ -351,17 +328,17 @@ var uPlot = (function () {
       else if (side === 1) rightSize = Math.max(rightSize, ax.size);    // right
     }
 
-    self._plotLeft = leftSize + pad[3];
-    self._plotTop = pad[0];
-    self._plotWidth = Math.max(1, self._width - self._plotLeft - rightSize - pad[1]);
-    self._plotHeight = Math.max(1, self._height - self._plotTop - bottomSize - pad[2]);
+    this._plotLeft = leftSize + pad[3];
+    this._plotTop = pad[0];
+    this._plotWidth = Math.max(1, this._width - this._plotLeft - rightSize - pad[1]);
+    this._plotHeight = Math.max(1, this._height - this._plotTop - bottomSize - pad[2]);
 
     // bbox in device pixels (matches uPlot convention)
-    self.bbox = {
-      left:   self._plotLeft * pxRatio,
-      top:    self._plotTop * pxRatio,
-      width:  self._plotWidth * pxRatio,
-      height: self._plotHeight * pxRatio,
+    this.bbox = {
+      left:   this._plotLeft * pxRatio,
+      top:    this._plotTop * pxRatio,
+      width:  this._plotWidth * pxRatio,
+      height: this._plotHeight * pxRatio,
     };
   };
 
@@ -385,10 +362,8 @@ var uPlot = (function () {
     // Find visible data range for Y auto-ranging
     var i0 = 0, i1 = d[0] ? d[0].length - 1 : 0;
     if (d[0] && d[0].length > 0) {
-      i0 = bsearch(d[0], xSc.min);
-      i1 = bsearch(d[0], xSc.max);
-      if (i0 > 0) i0--;
-      if (i1 < d[0].length - 1) i1++;
+      var vr = visRange(d[0], xSc.min, xSc.max);
+      i0 = vr[0]; i1 = vr[1];
     }
 
     // Y scales: compute from visible data
@@ -424,12 +399,6 @@ var uPlot = (function () {
         var r = cfg.range(self, sd2.min, sd2.max);
         sc.min = r[0];
         sc.max = r[1];
-      } else if (Array.isArray(cfg.range)) {
-        sc.min = cfg.range[0];
-        sc.max = cfg.range[1];
-      } else if (cfg.auto) {
-        sc.min = sd2.min;
-        sc.max = sd2.max === sd2.min ? sd2.max + 1 : sd2.max;
       } else {
         sc.min = sd2.min;
         sc.max = sd2.max === sd2.min ? sd2.max + 1 : sd2.max;
@@ -444,6 +413,7 @@ var uPlot = (function () {
     var ctx = self.ctx;
     var pl = self._plotLeft, pt = self._plotTop;
     var pw = self._plotWidth, ph = self._plotHeight;
+    var pr = pl + pw, pb = pt + ph;
     var d = self.data;
 
     // Clear the entire canvas (axes area + plot area)
@@ -487,13 +457,13 @@ var uPlot = (function () {
       for (var gi = 0; gi < splits2.length; gi++) {
         var pos;
         if (isXAxis) {
-          pos = valToPos(splits2[gi], sc2.min, sc2.max, pl, pl + pw);
+          pos = valToPos(splits2[gi], sc2.min, sc2.max, pl, pr);
           ctx.moveTo(crisp(pos), pt);
-          ctx.lineTo(crisp(pos), pt + ph);
+          ctx.lineTo(crisp(pos), pb);
         } else {
-          pos = valToPos(splits2[gi], sc2.min, sc2.max, pt + ph, pt);
+          pos = valToPos(splits2[gi], sc2.min, sc2.max, pb, pt);
           ctx.moveTo(pl, crisp(pos));
-          ctx.lineTo(pl + pw, crisp(pos));
+          ctx.lineTo(pr, crisp(pos));
         }
       }
       ctx.stroke();
@@ -536,16 +506,16 @@ var uPlot = (function () {
 
         if (isX) {
           // Bottom x-axis
-          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pl, pl + pw);
+          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pl, pr);
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
-          ctx.fillText(lbl, tpos, pt + ph + tickSize + gap);
+          ctx.fillText(lbl, tpos, pb + tickSize + gap);
           // Tick mark
-          ctx.moveTo(crisp(tpos), pt + ph);
-          ctx.lineTo(crisp(tpos), pt + ph + tickSize);
+          ctx.moveTo(crisp(tpos), pb);
+          ctx.lineTo(crisp(tpos), pb + tickSize);
         } else if (ax3.side === 3) {
           // Left y-axis
-          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pt + ph, pt);
+          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pb, pt);
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
           ctx.fillText(lbl, pl - tickSize - gap, tpos);
@@ -554,13 +524,13 @@ var uPlot = (function () {
           ctx.lineTo(pl - tickSize, crisp(tpos));
         } else if (ax3.side === 1) {
           // Right y-axis
-          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pt + ph, pt);
+          tpos = valToPos(splits3[ti], sc3.min, sc3.max, pb, pt);
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
-          ctx.fillText(lbl, pl + pw + tickSize + gap, tpos);
+          ctx.fillText(lbl, pr + tickSize + gap, tpos);
           // Tick mark
-          ctx.moveTo(pl + pw, crisp(tpos));
-          ctx.lineTo(pl + pw + tickSize, crisp(tpos));
+          ctx.moveTo(pr, crisp(tpos));
+          ctx.lineTo(pr + tickSize, crisp(tpos));
         }
       }
       ctx.stroke();
@@ -585,10 +555,8 @@ var uPlot = (function () {
       if (!ySc) continue;
 
       // Find visible range via binary search
-      var vi0 = bsearch(xArr, xSc.min);
-      var vi1 = bsearch(xArr, xSc.max);
-      if (vi0 > 0) vi0--;
-      if (vi1 < xArr.length - 1) vi1++;
+      var vr2 = visRange(xArr, xSc.min, xSc.max);
+      var vi0 = vr2[0], vi1 = vr2[1];
 
       if (vi0 >= xArr.length || vi1 < 0) continue;
 
@@ -600,8 +568,8 @@ var uPlot = (function () {
         var xv = xArr[pi];
         var yv = yArr[pi];
         if (yv == null) continue;
-        var px = valToPos(xv, xSc.min, xSc.max, pl, pl + pw);
-        var py = valToPos(yv, ySc.min, ySc.max, pt + ph, pt);
+        var px = valToPos(xv, xSc.min, xSc.max, pl, pr);
+        var py = valToPos(yv, ySc.min, ySc.max, pb, pt);
         if (!started) {
           ctx.moveTo(px, py);
           firstX = px;
@@ -623,7 +591,7 @@ var uPlot = (function () {
 
       // Fill area under line (if configured)
       if (ser.fill) {
-        var baseline = pt + ph; // y=0 at bottom of plot
+        var baseline = pb; // y=0 at bottom of plot
         ctx.lineTo(lastX, baseline);
         ctx.lineTo(firstX, baseline);
         ctx.closePath();
