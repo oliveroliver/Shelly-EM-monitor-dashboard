@@ -1359,6 +1359,7 @@ function exportCSV() {
     window.addEventListener('orientationchange', () => setTimeout(resizeChart, 200));
     new ResizeObserver(resizeChart).observe(document.getElementById('chart-container'));
     requestAnimationFrame(resizeChart);
+    setTimeout(wsConnect, 500);
   });
 
 }());
