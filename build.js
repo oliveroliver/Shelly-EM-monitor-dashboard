@@ -277,6 +277,23 @@ await Bun.write("dist/index.html.gz", gz);
 await Bun.write("dist/index.html.gz.b64", b64);
 R.push(`10. Write dist/`, ``);
 
+// 11. Merge into Shelly script
+const shellyTemplate = await Bun.file("shelly-em-script.js").text();
+const shellyScript = shellyTemplate.replace("__BASE64_GZIP__", b64);
+await Bun.write("dist/em-dashboard.shelly.js", shellyScript);
+const shellyBytes = Buffer.byteLength(shellyScript, "utf8");
+// Shelly scripting engine stores the script in RAM plus the decoded binary data.
+// atob() output is ~75% of base64 length (3 bytes per 4 chars).
+const decodedBinarySize = Math.ceil(b64.length * 3 / 4);
+const estimatedRam = shellyBytes + decodedBinarySize;
+R.push(
+  `11. Merge Shelly script`,
+  `    shelly-em-script.js + base64 payload → em-dashboard.shelly.js`,
+  `    script size:    ${fmt(shellyBytes)} bytes`,
+  `    decoded binary: ${fmt(decodedBinarySize)} bytes`,
+  `    estimated RAM:  ${fmt(estimatedRam)} bytes (script + decoded payload)`, ``
+);
+
 // ── Status ──────────────────────────────────────────────────────────────────
 if (warnings.length) {
   R.push(`Warnings`, `========`, ``);
@@ -293,7 +310,8 @@ R.push(
   `============`, ``,
   `  dist/index.html        ${fmt(minifiedHtml.length)} bytes  Minified single-file app (JS+CSS inlined)`,
   `  dist/index.html.gz     ${fmt(gz.length)} bytes  Gzip-compressed index.html`,
-  `  dist/index.html.gz.b64 ${fmt(b64.length)} bytes  Base64 of gzip (for firmware embedding)`, ``
+  `  dist/index.html.gz.b64 ${fmt(b64.length)} bytes  Base64 of gzip (for firmware embedding)`,
+  `  dist/em-dashboard.shelly.js ${fmt(shellyBytes)} bytes  Ready-to-upload Shelly script`, ``
 );
 
 // ── Size comparison (includes attoplot standalone stats, no files written) ──

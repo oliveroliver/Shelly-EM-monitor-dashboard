@@ -32,6 +32,12 @@ Build Report
 
 10. Write dist/
 
+11. Merge Shelly script
+    shelly-em-script.js + base64 payload → em-dashboard.shelly.js
+    script size:    14,811 bytes
+    decoded binary: 10,836 bytes
+    estimated RAM:  25,647 bytes (script + decoded payload)
+
 Build complete: no warnings or errors
 
 Output Files
@@ -40,6 +46,7 @@ Output Files
   dist/index.html        31,516 bytes  Minified single-file app (JS+CSS inlined)
   dist/index.html.gz     10,836 bytes  Gzip-compressed index.html
   dist/index.html.gz.b64 14,448 bytes  Base64 of gzip (for firmware embedding)
+  dist/em-dashboard.shelly.js 14,811 bytes  Ready-to-upload Shelly script
 
 Size Comparison
 ===============
