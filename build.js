@@ -3,6 +3,10 @@
 import { mkdirSync } from "fs";
 import { gzipSync, constants } from "zlib";
 import { minify } from "html-minifier-terser";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+
+process.chdir(dirname(fileURLToPath(import.meta.url)));
 
 // ── Class name + ID minification ─────────────────────────────────────────────
 
